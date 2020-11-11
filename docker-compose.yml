@@ -1,0 +1,131 @@
+version: "2"
+services:
+  zookeeper:
+    image: zookeeper:3.6.2
+    ports:
+      - "2181:2181"                        ## 对外暴露的 zookeeper 端口号
+    container_name: zookeeper
+  kafka:
+    image: wurstmeister/kafka:2.13-2.6.0
+    volumes:
+      - /etc/localtime:/etc/localtime      ## kafka 镜像和宿主机器之间时间保持一致
+    ports:
+      - "9092:9092"                        ## 对外暴露的 kafka 端口号
+    environment:
+      KAFKA_ADVERTISED_HOST_NAME: localhost
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_PORT: 9092
+      KAFKA_BROKER_ID: 1
+      KAFKA_LOG_RETENTION_HOURS: 120
+      KAFKA_MESSAGE_MAX_BYTES: 10000000
+      KAFKA_REPLICA_FETCH_MAX_BYTES: 10000000
+      KAFKA_GROUP_MAX_SESSION_TIMEOUT_MS: 60000
+      KAFKA_NUM_PARTITIONS: 3
+      KAFKA_DELETE_RETENTION_MS: 1000
+      KAFKA_CREATE_TOPICS: "stream-in:1:1,stream-out:1:1"      ## 自动创建 topics
+    container_name: kafka
+  #  kafka-manager: ## 开源的 kafka 集群管理工具，提供 web 界面
+  #    image: sheepkiller/kafka-manager
+  #    environment:
+  #      ZK_HOSTS: 127.0.01:2181
+  #      KAFKA_MANAGER_AUTH_ENABLED: "true"
+  #      KAFKA_MANAGER_USERNAME: kafka_admin
+  #      KAFKA_MANAGER_PASSWORD: kafka_admin
+  #    ports:
+  #      - "9001:9000"
+  #    container_name: kafka-manager
+  #  jobmanager:
+  #    image: flink
+  #    expose:
+  #      - "6123"
+  #    ports:
+  #      - "8081:8081"
+  #    command: jobmanager
+  #    environment:
+  #      - JOB_MANAGER_RPC_ADDRESS=jobmanager
+  #    container_name: jobmanager
+  #  taskmanager:
+  #    image: flink
+  #    expose:
+  #      - "6121"
+  #      - "6122"
+  #    depends_on:
+  #      - jobmanager
+  #    command: taskmanager
+  #    links:
+  #      - "jobmanager:jobmanager"
+  #    environment:
+  #      - JOB_MANAGER_RPC_ADDRESS=jobmanager
+  #    container_name: taskmanager
+  #  elasticsearch:
+  #    image: docker.elastic.co/elasticsearch/elasticsearch-oss:6.3.1
+  #    environment:
+  #      - cluster.name=docker-cluster
+  #      - bootstrap.memory_lock=true
+  #      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+  #      - discovery.type=single-node
+  #    ports:
+  #      - "9200:9200"
+  #      - "9300:9300"
+  #    ulimits:
+  #      memlock:
+  #        soft: -1
+  #        hard: -1
+  #      nofile:
+  #        soft: 65536
+  #        hard: 65536
+  #    container_name: elasticsearch
+  #  hive:
+  #    image: bde2020/hive:latest
+  #    depends_on:
+  #      - jobmanager
+  #    environment:
+  #      FLINK_JOBMANAGER_HOST: jobmanager
+  #    container_name: hive
+  #  hive:
+  #    image: ruili2/hive:latest
+  #    depends_on:
+  #      - jobmanager
+  #    environment:
+  #      FLINK_JOBMANAGER_HOST: jobmanager
+  #    container_name: hive
+  #  mysql:
+  #    image: mysql:5.7
+  #    command: --default-authentication-plugin=mysql_native_password
+  #    restart: always
+  #    ports:
+  #      - 3306:3306
+  #    environment:
+  #      MYSQL_ROOT_PASSWORD: example
+  #      MYSQL_DATABASE: flink-test
+  #    volumes:
+  #      - ./examples/mysql/sql:/docker-entrypoint-initdb.d
+  #    container_name: mysql
+  jobmanager:
+    image: pyflink/playgrounds:1.11.0
+    volumes:
+      - ./examples:/opt/examples
+    hostname: "jobmanager"
+    expose:
+      - "6123"
+    ports:
+      - "8088:8088"
+    command: jobmanager
+    environment:
+      - JOB_MANAGER_RPC_ADDRESS=jobmanager
+    container_name: jobmanager
+  taskmanager:
+    image: pyflink/playgrounds:1.11.0
+    volumes:
+      - ./examples:/opt/examples
+    expose:
+      - "6121"
+      - "6122"
+    depends_on:
+      - jobmanager
+    command: taskmanager
+    links:
+      - jobmanager:jobmanager
+    environment:
+      - JOB_MANAGER_RPC_ADDRESS=jobmanager
+    container_name: taskmanager
