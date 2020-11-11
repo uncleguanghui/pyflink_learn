@@ -20,3 +20,4 @@ dbs/
 *.pid
 *.log
 *.jl
+*result*

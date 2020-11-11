@@ -1,0 +1,1 @@
+docker-compose exec jobmanager ./bin/flink run -py /opt/$1

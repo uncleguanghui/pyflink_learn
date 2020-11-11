@@ -1,0 +1,2 @@
+apache-flink==1.11.2
+kafka-python>=2.0.2
