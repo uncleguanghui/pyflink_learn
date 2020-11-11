@@ -72,3 +72,5 @@ sh run.sh examples/xxx/xxx.py
 ```bash
 python examples/1_word_count/batch.py
 ```
+
+具体教程见 [PyFlink 从入门到精通](examples/README.md)
