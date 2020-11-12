@@ -1,2 +1,4 @@
 apache-flink==1.11.2
 kafka-python>=2.0.2
+faker>=4.14.2
+numpy>=1.16.3

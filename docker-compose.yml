@@ -148,7 +148,7 @@ services:
     depends_on:
       - jobmanager
     command: taskmanager
-    network_mode: host
+    #    network_mode: host
     environment:
       - JOB_MANAGER_RPC_ADDRESS=jobmanager
     container_name: taskmanager
