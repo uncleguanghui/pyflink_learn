@@ -56,13 +56,33 @@ pyflink,2
 
 ## 2、自定义函数 UDF
 
-该案例展示了如何用 Flink 管理自定义函数 UDF，来实现复杂的处理逻辑。
+> **业务场景**
+> 
+> 通过 Flink 对系统上报的 syslog 进行实时解析并生成告警，搭建实时监控告警系统。
 
-> 待补充
+该案例是对线上实时监控告警的一小部分进行了改造（线上是流处理，本案例改成了批处理），展示了如何用 Flink 管理自定义函数 UDF，来实现复杂的日志解析逻辑。
+
+同时，本案例也是 [官方文档](https://ci.apache.org/projects/flink/flink-docs-master/zh/dev/python/table-api-users-guide/udfs/python_udfs.html)
+里的标量函数（ Scalar Function ）的一个简单实现，在 PyFlink 1.11 里的 UDF 已经比较强大了，更多技巧请前往官方文档进行学习。
+
+运行命令为：
+
+```bash
+sh run.sh examples/2_udf/batch.py
+```
+
+运行后的结果写到了同级目录下的 result.csv 中：
+
+```
+syslog-user,172.25.0.2,10.200.80.1,root,root,ls,2020-10-28 14:27:28
+syslog-user,172.25.0.2,10.200.80.1,root,root,ll,2020-10-28 14:27:31
+syslog-user,172.25.0.2,10.200.80.1,root,root,vim /etc/my.cnf,2020-10-28 14:28:06
+......
+```
 
 通过本案例，可以学到：
 1. 如何创建并注册 UDF 。
-2. 如何使用标量 UDF 和表值 UDF。
+2. 如何使用 UDF 。
 
 ## 3、实时 CDC
 
