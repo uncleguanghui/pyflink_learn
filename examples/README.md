@@ -26,11 +26,23 @@ Flink 是目前非常火热的流处理框架，可以很好地实现批流一�
 
 该案例展示了如何用 Flink 做批处理，统计指定文件下的单词数，并将统计结果写入到新的文件下。
 
+运行命令为：
+
 ```bash
 sh run.sh examples/1_word_count/batch.py
 ```
 
-运行后的结果写到了同级目录下的 result.csv 中。
+`batch.py` 批处理脚本执行逻辑是：
+1. 首先，创建 Blink 批处理环境。（关于 Blink 和 Flink 的区别，见脚本 `1_word_count/batch.py` 的文件头）。
+2. 然后，创建源表（source），这里使用 `filesystem` 作为连接器，按照指定的 `csv` 格式来批量地读取指定路径的文件（或文件夹）。
+3. 接着，创建结果表（sink），这里同样使用 `filesystem` 连接器，以便将处理后结果写入目标文件（或文件夹）内。
+4. 最后，编写批处理逻辑，完成批处理任务。
+
+对于上述每个阶段的实现，`batch.py` 脚本提供了基于 Table API 和基于 SQL API 这两种不同方式的实现。
+
+SQL API 是对 Table API 的更高层次的封装，内部实现了一些优化，便于阅读，但相对地功能没有 Table API 来得全面和强大，本质上并无不同之处，读者根据需求可自行选择实现方法。
+
+运行后的结果写到了同级目录下的 result.csv 中：
 
 ```
 flink,3
@@ -42,41 +54,88 @@ pyflink,2
 2. 如何创建数据源表和结果表，实现有单一流入和单一流出的 dataflow 的处理。
 3. 如何用 Table API 和 SQL API 实现聚合逻辑。
 
-### 2、自定义函数 UDF
+## 2、自定义函数 UDF
 
 该案例展示了如何用 Flink 管理自定义函数 UDF，来实现复杂的处理逻辑。
+
+> 待补充
 
 通过本案例，可以学到：
 1. 如何创建并注册 UDF 。
 2. 如何使用标量 UDF 和表值 UDF。
 
-### 3、无状态流处理
+## 3、实时 CDC
 
-该案例展示了如何用 Flink 进行无状态的流处理，来实现数据的实时同步和计算。
-* 业务场景1：实时数仓同步，监听 MySQL 的数据变更，并实时同步到 HDFS。
-* 业务场景2：对于 kafka 里的 json 格式的线上日志，来一条解析一条（不考虑上下文的关系），并将解析结果写入 kafka。
-* 业务场景3：对于海量日志，逐条解析会造成大量的吞吐，性能下降，考虑加入缓存。
+该案例展示了如何用 Flink 进行数据库的实时同步。
+
+### 3.1、MySQL CDC
+
+> **业务场景**
+> 
+> 监听 MySQL 的 binlog 数据变更，并实时同步到另一个 MySQL。
+
+`CDC` 是 `change data capture`，即变化数据捕捉。CDC 是数据库进行备份的一种方式，常用于大量数据的备份工作。
+
+CDC 分为入侵式的和非入侵式两种：
+* 入侵式：如基于触发器备份、基于时间戳备份、基于快照备份。
+* 非入侵式：如基于日志的备份。
+
+MySQL 基于日志的 CDC 就是要开启 mysql 的 binlog（ binary log ）。
+如果使用本教程的 docker-compose 安装的 MySQL 8.0.22，默认是开启 binlog 的。
+实际业务 MySQL 可能未开启 binlog，可以通过执行下面的命令，查看 `log_bin` 变量的值是否为 `ON`。
+
+```mysql
+show variables like '%log_bin%';
+```
+
+`3_database_sync/stream.py` 实时同步脚本通过下面 3 个 Jar 包，实现了 MySQL CDC。
+1. flink-connector-jdbc_2.11-1.11.2.jar：通过 JDBC 连接器来从数据库里读取或写入数据。
+2. flink-sql-connector-mysql-cdc-1.1.0.jar：通过 MySQL-CDC 连接器从 MySQL 的 binlog 里提取更改。
+3. mysql-connector-java-5.1.49.jar：JDBC 连接器的驱动（ 帮助 java 连接 MySQL ）。
+
+需要注意的是：
+1. 创建 source 表的时候，定义连接器为 mysql-cdc ，写法请参照 [文档](https://ci.apache.org/projects/flink/flink-docs-stable/zh/dev/table/connectors/jdbc.html) 。
+1. 创建 sink 表的时候，定义连接器为 jdbc，写法请参照 [文档](https://github.com/ververica/flink-cdc-connectors) 。
+1. 由于 source 表可能有更新或删除，因此只能使用 upsert 模式来实现实时同步，该模式要求 sink 表里设置主键（ primary key）。
+
+运行命令为：
+
+```bash
+sh run.sh examples/3_database_sync/stream.py
+```
 
 通过本案例，可以学到：
 1. 如何创建流处理环境。
-2. 如何使用各类 connector ，以及如何管理 connector 所需的依赖。
+2. 如何使用各类 connector ，以及如何管理在 pyflink 脚本中指定 jar 依赖。
 3. 如何实现实时数仓的数据同步。
-4. 如何将数据同步到多个数据源。
-4. 如何对实时同步进行优化。
 
-### 4、有状态流处理
+### 3.2、Kafka 同步到多数据源
+
+> **业务场景**
+> 
+> 对于 kafka 里的 json 格式的线上日志，进行无状态的解析计算，并将结果同步到多个数据库 —— 如 Hive、MySQL。
+
+通过本案例，可以学到：
+1. 如何将数据同步到多个数据源。
+1. 如何对实时同步进行优化。
+
+## 4、有状态流处理
 
 该案例展示了如何用 Flink 进行有状态的流处理，通过窗口函数完成统计需求。
 * 业务场景1：考虑日志上下文，按不同用户 ID 分别统计各自每分钟的点击量。
 
+> 待补充
+
 通过本案例，可以学到：
 1. 如何使用窗口函数。
 
-### 5、多流 join
+## 5、多流 join
 
 该案例展示了如何用 Flink 对多个数据源进行 join 处理。
 
 业务场景：在做 AI 算法的在线学习时，可能存在多个数据源，需要同时对多个数据源的数据进行处理并生成所需特征。
+
+> 待补充
 
 通过本案例，可以学到：
 1. 如何指定多个 source 。
