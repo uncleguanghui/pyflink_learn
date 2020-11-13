@@ -1,9 +1,9 @@
 """
-读取 kafka 的数据并打印
+读取 kafka 的用户操作数据并打印
 """
 from kafka import KafkaConsumer
 
-topic = 'user_click'
+topic = 'user_action'
 bootstrap_servers = ['localhost:9092']
 group_id = 'group7'
 

@@ -9,6 +9,7 @@ dist/
 logs/
 log/
 dbs/
+target/
 
 .coverage
 .DS_Store
@@ -21,3 +22,4 @@ dbs/
 *.log
 *.jl
 *result*
+dependency*

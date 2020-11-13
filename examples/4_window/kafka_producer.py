@@ -1,3 +1,6 @@
+"""
+往 Kafka 里批量产生随机的用户操作数据
+"""
 import random
 import numpy as np
 from json import dumps
@@ -11,7 +14,7 @@ seed = 2020  # 设置随机数种子，保证每次运行的结果都一样
 num_users = 50  # 50 个用户
 max_msg_per_second = 20  # 每秒钟的最大消息数
 run_seconds = 3600  # 脚本最长运行时间，防止无限写入 kafka
-topic = "user_click"  # kafka topic
+topic = "user_action"  # kafka topic
 bootstrap_servers = ['localhost:9092']
 
 fake = Faker(locale='zh_CN')
@@ -33,14 +36,14 @@ class UserGroup:
         """
         生成男人
         """
-        return {'user_name': fake.name_male(), 'sex': '男'}
+        return {'name': fake.name_male(), 'sex': '男'}
 
     @staticmethod
     def gen_female():
         """
         生成女人
         """
-        return {'user_name': fake.name_female(), 'sex': '女'}
+        return {'name': fake.name_female(), 'sex': '女'}
 
     def get_user(self):
         """
@@ -68,8 +71,10 @@ def write_data():
         user = group.get_user()
         cur_data = {
             "ts": now.strftime("%Y-%m-%d %H:%M:%S"),
-            "user_name": user['user_name'],
+            "name": user['name'],
             "sex": user['sex'],
+            "action": 'click' if random.random() < 0.9 else 'scroll',  # 用户的操作
+            "is_delete": 0 if random.random() < 0.9 else 1  # 10% 的概率丢弃这条数据
         }
         producer.send(topic, value=cur_data)
 
