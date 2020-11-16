@@ -95,7 +95,7 @@ CREATE TABLE sink (
 # 关于 Pandas UDAF 的使用，请参考扩展阅读 3。
 
 @udaf(result_type=DataTypes.STRING(), func_type="pandas")
-def male_click_top10(name, sex, action, is_delete):
+def male_click_top10(name, sex):
     """
     统计点击量最多的 10 个男人（只统计 sex=male、action=click 的数量，忽略 is_delete=1 的数据）
     :param name:
@@ -104,7 +104,7 @@ def male_click_top10(name, sex, action, is_delete):
     :param is_delete:
     :return:
     """
-    names = name[(sex == 'male') & (action == 'click') & (is_delete == 1)]
+    names = name[sex == 'male']
     return names.value_counts().iloc[:10].to_json()
 
 
@@ -118,7 +118,7 @@ def female_click_top10(name, sex, action, is_delete):
     :param is_delete:
     :return:
     """
-    names = name[(sex == 'male') & (action == 'click') & (is_delete == 1)]
+    names = name[sex == 'female']
     return names.value_counts().iloc[:10].to_json()
 
 
@@ -132,10 +132,11 @@ slide_window = Slide.over("60.seconds").every("1.seconds").on('ts').alias("w")  
 
 # 基于 Table API
 t_env.from_path('source') \
+    .filter("action = 'click' and is_delete = 1 ") \
     .window(slide_window) \
     .group_by("w") \
-    .select("male_click_top10(name, sex, action, is_delete) AS male_top10, "
-            "female_click_top10(name, sex, action, is_delete) AS female_top10, "
+    .select("male_click_top10(name, sex) AS male_top10, "
+            "female_click_top10(name, sex) AS female_top10, "
             "w.start AS start_time, "
             "w.end AS end_time") \
     .execute_insert("sink")
