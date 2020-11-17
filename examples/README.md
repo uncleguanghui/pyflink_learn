@@ -1,6 +1,17 @@
 # PyFlink 从入门到精通
 
-[toc]
+* [1、批处理 Word Count](#1批处理-Word-Count)
+* [2、自定义函数 UDF](#2自定义函数-UDF)
+* [3、实时 CDC](#3实时-CDC)
+    * [3.1、MySQL CDC](#31MySQL-CDC)
+    * [3.2、Kafka 同步到多数据源](#32Kafka-同步到多数据源)
+* [4、有状态流处理](#4、有状态流处理)
+    * [4.1、准备1：数据模拟器](#41准备1数据模拟器)
+    * [4.2、准备2：kafka 监控](#42准备2kafka-监控)
+    * [4.3、准备3：聚合函数](#43准备3聚合函数)
+    * [4.4、运行](#44运行)
+* [5、多流 join](#5多流-join)
+
 
 Flink 是目前非常火热的流处理框架，可以很好地实现批流一体，即一套代码即可以用于批处理，也可以用于流处理。
 
@@ -25,6 +36,8 @@ Flink 是目前非常火热的流处理框架，可以很好地实现批流一�
 ## 1、批处理 Word Count
 
 该案例展示了如何用 Flink 做批处理，统计指定文件下的单词数，并将统计结果写入到新的文件下。
+
+![数据流向图](images/image1.jpg)
 
 运行命令为：
 
@@ -64,6 +77,9 @@ pyflink,2
 
 同时，本案例也是 [官方文档](https://ci.apache.org/projects/flink/flink-docs-master/zh/dev/python/table-api-users-guide/udfs/python_udfs.html)
 里的标量函数（ Scalar Function ）的一个简单实现，在 PyFlink 1.11 里的 UDF 已经比较强大了，更多技巧请前往官方文档进行学习。
+
+![数据流向图](images/image2.jpg)
+
 
 运行命令为：
 
@@ -118,6 +134,9 @@ show variables like '%log_bin%';
 1. 创建 sink 表的时候，定义连接器为 jdbc，写法请参照 [文档](https://github.com/ververica/flink-cdc-connectors) 。
 1. 由于 source 表可能有更新或删除，因此只能使用 upsert 模式来实现实时同步，该模式要求 sink 表里设置主键（ primary key）。
 
+![数据流向图](images/image3.jpg)
+
+
 运行命令为：
 
 ```bash
@@ -153,6 +172,8 @@ flink run -m localhost:8081 -py stream11.py
 
 该案例展示了如何用 Flink 进行有状态的流处理，通过 Slide 窗口函数实时更新统计结果，得到排行榜数据。
 
+![数据流向图](images/image4.jpg)
+
 由于本案例稍微有些复杂，因此需要做一些前置准备 —— 数据模拟器和监控脚本 —— 然后再开始运行实时计算。
 
 ### 4.1、准备1：数据模拟器
@@ -163,7 +184,7 @@ flink run -m localhost:8081 -py stream11.py
 
 它会往 kafka 服务的 user_action 主题里，每秒写入 20 条模拟数据，数据格式为 json 字符串，如下：
 
-```json
+```bash
 {
   "ts": "2020-01-01 01:01:01",  # 当前时间
   "name": "李华",  # 姓名
