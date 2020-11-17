@@ -11,6 +11,7 @@ https://ci.apache.org/projects/flink/flink-docs-release-1.11/dev/table/functions
 """
 
 import os
+from pyflink.datastream import StreamExecutionEnvironment
 from pyflink.table import StreamTableEnvironment, EnvironmentSettings
 from pyflink.table.window import Slide
 
@@ -21,18 +22,29 @@ sink_topic = "click_rank"  # 结果
 
 # ########################### 初始化流处理环境 ###########################
 
-# 创建 Blink 流处理环境
+# 创建 Blink 流处理环境，注意此处需要指定 StreamExecutionEnvironment，否则无法导入 java 函数
+env = StreamExecutionEnvironment.get_execution_environment()
 env_settings = EnvironmentSettings.new_instance().in_streaming_mode().use_blink_planner().build()
-t_env = StreamTableEnvironment.create(environment_settings=env_settings)
+t_env = StreamTableEnvironment.create(env, environment_settings=env_settings)
 # 设置该参数以使用 UDF
 t_env.get_config().get_configuration().set_boolean("python.fn-execution.memory.managed", True)
 
 # ########################### 指定 jar 依赖 ###########################
 # flink-sql-connector-kafka_2.11-1.11.2.jar：从扩展阅读 2 里获得，作用是通过 JDBC 连接器来从数据库里读取或写入数据。
+# flink-udf-1.0-SNAPSHOT.jar：包含了若干种基于 Java 开发的自定义 UDF 和 UDAF
 
 dir_kafka_sql_connect = os.path.join(os.path.abspath(os.path.dirname(__file__)),
                                      'flink-sql-connector-kafka_2.11-1.11.2.jar')
 t_env.get_config().get_configuration().set_string("pipeline.jars", 'file://' + dir_kafka_sql_connect)
+
+dir_java_udf = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'flink-udf-1.0-SNAPSHOT.jar')
+t_env.get_config().get_configuration().set_string("pipeline.classpaths", 'file://' + dir_java_udf)
+
+# ########################### 注册 UDF ###########################
+# 本次用到的是 flink-udf-1.0-SNAPSHOT.jar 里的 TopN 类，用于计算点击量最高的 N 个人
+
+# 指定 Java 聚合函数的入口
+t_env.register_java_function('getTopN', 'com.flink.udf.TopN')
 
 # ########################### 创建源表(source) ###########################
 # 使用 Kafka-SQL 连接器从 Kafka 实时消费数据。
@@ -84,75 +96,39 @@ CREATE TABLE sink (
 
 # ########################### 流处理任务 ###########################
 
-# 创建长度为 60 秒的滑动窗口，每隔 1 秒滑动一次
-slide_window = Slide.over("60.seconds").every("1.seconds").on('ts').alias("w")
-
-# 基于 Table API 生成聚合后的表
-table1 = t_env.from_path('source') \
-    .filter("action = 'click'") \
-    .filter("is_delete = 1") \
-    .window(slide_window) \
-    .group_by("w, sex, name") \
-    .select("w.start AS start_time, "
-            "w.end AS end_time, "
-            "sex, "
-            "name, "
-            "count(1) AS cnt")
-
-t_env.create_temporary_view('temp1', table1)
-
-# 按性别分组，按点击量排序，得到男女各10个结果
-topN_query = """
-SELECT 
-    sex,
-    start_time,
-    end_time,
-    CONCAT('{"name":"', name, '","cnt":', CAST(cnt AS STRING), '}') as json_data
-FROM
-    (
-    SELECT 
-        start_time,
-        end_time,
-        sex,
-        name,
-        cnt,
-        ROW_NUMBER() OVER (PARTITION BY sex ORDER BY cnt desc) AS rownum
-    FROM
-        temp1
-    ) t
-WHERE 
-    rownum <= 10
-"""
-t_env.create_temporary_view('temp2', t_env.sql_query(topN_query))
-
-# 合并到一起
-combine_query = """
+# 方法1：基于 SQL API 来聚合
+# 在 GROUP BY 里使用 HOP 滑动窗口函数，入参分别为：时间戳、滑动步长、窗口长度
+# 在 SELECT 里使用 HOP_START 和 HOP_END 来获得滑动窗口的开始时间和结束时间
+t_env.sql_query("""
 SELECT
     sex,
-    LISTAGG(json_data) AS top10,
-    start_time,
-    end_time
-    --FIRST(start_time) AS start_time,
-    --FIRST(end_time) AS end_time
-    --FIRST_VALUE(start_time) AS start_time,
-    --FIRST_VALUE(end_time) AS end_time
+    getTopN(name, 10, 1) AS top10,
+    HOP_START(ts, INTERVAL '1' SECOND, INTERVAL '60' SECOND) AS start_time,
+    HOP_END(ts, INTERVAL '1' SECOND, INTERVAL '60' SECOND) AS end_time
 FROM
-    temp2
+    source
+WHERE
+    action = 'click'
+    AND is_delete = 0
 GROUP BY
     sex,
-    start_time,
-    end_time
-"""
-t_env.create_temporary_view('temp3', t_env.sql_query(combine_query))
+    HOP(ts, INTERVAL '1' SECOND, INTERVAL '60' SECOND)
+""").insert_into("sink")
+t_env.execute('Top10 User Click')
 
-t_env.from_path('temp3').execute_insert("sink")
-# t_env.sql_query(combine_query).select('sex, top10, start_time, end_time').execute_insert("sink")
-
-# t_env.from_path('temp2') \
-#     .group_by('sex, start_time, end_time')\
-#     .select('sex, '
-#             'start_time, '
-#             'end_time, '
-#             'LISTAGG(json_data) AS top10') \
-#     .execute_insert("sink")
-t_env.execute(source_topic)
+# 方法2：基于 Table API 来聚合
+# 创建长度为 60 秒、滑动步长为 1 秒的滑动窗口 slide_window ，并重命名为 w
+# 使用 w.start, w.end 来获得滑动窗口的开始时间与结束时间
+# slide_window = Slide.over("60.seconds").every("1.seconds").on('ts').alias("w")
+# t_env.from_path('source') \
+#     .filter("action = 'click'") \
+#     .filter("is_delete = 1") \
+#     .window(slide_window) \
+#     .group_by("w, sex") \
+#     .select("sex, "
+#             "getTopN(name, 10, 1) as top10, "
+#             "w.start AS start_time, "
+#             "w.end AS end_time") \
+#     .insert_into("sink")
+#
+# t_env.execute('Top10 User Click')

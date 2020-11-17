@@ -10,6 +10,7 @@ logs/
 log/
 dbs/
 target/
+venv/
 
 .coverage
 .DS_Store
@@ -21,5 +22,7 @@ target/
 *.pid
 *.log
 *.jl
+*.iml
+venv*
 *result*
 dependency*

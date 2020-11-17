@@ -6,17 +6,42 @@
 
 ## 1、环境搭建
 
-两种方式搭建本地 pyflink 开发环境。
+### 1.1、Mac
 
-### 1.1、基于本地环境
-
-本地安装有 python3.5 、3.6 或 3.7 版本，则可以直接安装依赖 
+首先本地的 java 版本需要是 8 或 11
 
 ```bash
-pip install -r requirements.txt
-``` 
+java -version
+# 可能会看到 java version "1.8.0_111"
+```
 
-### 1.2、基于 docker
+然后使用 brew 安装 Flink
+
+```bash
+brew switch apache-flink 1.11.2
+...
+flink --version  # 查看版本
+```
+
+在 `/usr/local/Cellar/apache-flink/1.11.2/libexec/bin/start-cluster.sh` 路径下，启动 flink
+
+```bash
+sh start-cluster.sh
+```
+
+为了方便，可以修改本地的 `~/.bash_profile` 文件，插入下面的 3 行内容（注意修改版本）然后运行 `source ~/.bash_profile` 来激活修改。
+
+```bash
+alias start-flink='/usr/local/Cellar/apache-flink/1.11.2/libexec/bin/start-cluster.sh'
+alias stop-flink='/usr/local/Cellar/apache-flink/1.11.2/libexec/bin/stop-cluster.sh'
+alias flink='/usr/local/Cellar/apache-flink/1.11.2/libexec/bin/flink'
+```
+
+### 1.2、其他系统
+
+请参考 [官方文档](https://ci.apache.org/projects/flink/flink-docs-stable/ops/deployment/local.html)
+
+### 1.3、基于 docker
 
 从开发角度来看，以最快的速度搭建起一个可以运行的环境最为重要。
 
@@ -71,6 +96,12 @@ sh run.sh examples/xxx/xxx.py
 
 ```bash
 python examples/1_word_count/batch.py
+```
+
+如果本地已经安装了 Flink 则可以直接以 standalone 的模式来运行
+
+```
+flink run -m localhost:8081 -py stream11.py
 ```
 
 具体教程见 [PyFlink 从入门到精通](examples/README.md)

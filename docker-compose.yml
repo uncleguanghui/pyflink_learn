@@ -24,6 +24,64 @@ services:
       KAFKA_DELETE_RETENTION_MS: 1000
       KAFKA_CREATE_TOPICS: "stream-in:1:1,stream-out:1:1"      ## 自动创建 topics
     container_name: kafka
+  mysql1:
+    image: mysql:8.0.22     # 5.7 版本本地连接不上
+    command: [
+        '--default-authentication-plugin=mysql_native_password',
+        '--character-set-server=utf8mb4',
+        '--collation-server=utf8mb4_unicode_ci',
+        '--log-bin=mysql-bin',
+    ]
+    ports:
+      - 3306:3306
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+    volumes:
+      - ./examples/mysql:/docker-entrypoint-initdb.d
+    container_name: mysql1
+  mysql2:
+    image: mysql:8.0.22          # 5.7 版本本地连接不上
+    command: [
+        '--default-authentication-plugin=mysql_native_password',
+        '--character-set-server=utf8mb4',
+        '--collation-server=utf8mb4_unicode_ci'
+    ]
+    ports:
+      - 3307:3306                # 第二个数据库的端口是 3307
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+    volumes:
+      - ./examples/mysql:/docker-entrypoint-initdb.d
+    container_name: mysql2
+  adminer:
+    image: adminer
+    restart: always
+    ports:
+      - 8080:8080
+    container_name: adminer
+  #  jobmanager:
+  #    image: flink:1.11.2-scala_2.12-java8
+  #    ports:
+  #      - "8081:8081"
+  #    command: jobmanager
+  #    volumes:
+  #      - ./examples:/opt/examples
+  #    #    network_mode: flink-network
+  #    environment:
+  #      FLINK_PROPERTIES: "jobmanager.rpc.address: jobmanager"
+  #    container_name: jobmanager
+  #  taskmanager:
+  #    image: flink:1.11.2-scala_2.12-java8
+  #    volumes:
+  #      - ./examples:/opt/examples
+  #    depends_on:
+  #      - jobmanager
+  #    command: taskmanager
+  #    scale: 1
+  #    #    network_mode: flink-network
+  #    environment:
+  #      FLINK_PROPERTIES: "jobmanager.rpc.address: jobmanager"
+  #    container_name: taskmanager
   #  kafka-manager: ## 开源的 kafka 集群管理工具，提供 web 界面
   #    image: sheepkiller/kafka-manager
   #    environment:
@@ -89,72 +147,6 @@ services:
   #    environment:
   #      FLINK_JOBMANAGER_HOST: jobmanager
   #    container_name: hive
-  mysql1:
-    image: mysql:8.0.22     # 5.7 版本本地连接不上
-    command: [
-        '--default-authentication-plugin=mysql_native_password',
-        '--character-set-server=utf8mb4',
-        '--collation-server=utf8mb4_unicode_ci',
-        '--log-bin=mysql-bin',
-    ]
-    ports:
-      - 3306:3306
-    environment:
-      MYSQL_ROOT_PASSWORD: root
-    volumes:
-      - ./examples/mysql:/docker-entrypoint-initdb.d
-    container_name: mysql1
-  mysql2:
-    image: mysql:8.0.22          # 5.7 版本本地连接不上
-    command: [
-        '--default-authentication-plugin=mysql_native_password',
-        '--character-set-server=utf8mb4',
-        '--collation-server=utf8mb4_unicode_ci'
-    ]
-    ports:
-      - 3307:3306                # 第二个数据库的端口是 3307
-    environment:
-      MYSQL_ROOT_PASSWORD: root
-    volumes:
-      - ./examples/mysql:/docker-entrypoint-initdb.d
-    container_name: mysql2
-  #  myflink:
-  #    image: pyflink/playgrounds:1.11.0
-  #    container_name: myflink
-  #    command: [
-  #        '&& pip install apache-flink -U'
-  #    ]
-  jobmanager:
-    image: pyflink/playgrounds:1.11.0
-    volumes:
-      - ./examples:/opt/examples
-    hostname: "jobmanager"
-    #    network_mode: host
-    expose:
-      - "6123"
-    ports:
-      - "8088:8088"
-    command: jobmanager
-    environment:
-      - JOB_MANAGER_RPC_ADDRESS=jobmanager
-    container_name: jobmanager
-  taskmanager:
-    image: pyflink/playgrounds:1.11.0
-    volumes:
-      - ./examples:/opt/examples
-    expose:
-      - "6121"
-      - "6122"
-    depends_on:
-      - jobmanager
-    command: taskmanager
-    #    network_mode: host
-    environment:
-      - JOB_MANAGER_RPC_ADDRESS=jobmanager
-    container_name: taskmanager
-  adminer:
-    image: adminer
-    restart: always
-    ports:
-      - 8080:8080
-    container_name: adminer
+  # networks:
+  #   flink-network:
+  #     name: flink-network

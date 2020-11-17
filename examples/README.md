@@ -135,7 +135,11 @@ sh run.sh examples/3_database_sync/stream.py
 > 
 > 对于 kafka 里的 json 格式的线上日志，进行无状态的解析计算，并将结果同步到多个数据库 —— 如 Hive、MySQL。
 
-> 待补充
+运行命令为：
+
+```bash
+flink run -m localhost:8081 -py stream11.py
+```
 
 通过本案例，可以学到：
 1. 如何将数据同步到多个数据源。
@@ -145,16 +149,145 @@ sh run.sh examples/3_database_sync/stream.py
 
 > **业务场景**
 > 
-> 考虑日志上下文，按不同用户 ID 分别统计各自每分钟的点击量，分别得到男女点击量各 TOP 10 的用户数据，并每 0.1 秒将更新结果到 Kafka。
+> 实时点击量排行榜。统计过去 1 分钟内，点击量最高的男女用户各 10 名及其具体的点击数，同时每隔 1 秒更新统计结果，并将统计结果同步到 kafka
 
+该案例展示了如何用 Flink 进行有状态的流处理，通过 Slide 窗口函数实时更新统计结果，得到排行榜数据。
 
-该案例展示了如何用 Flink 进行有状态的流处理，通过窗口函数完成统计需求。
-* 业务场景1：考虑日志上下文，按不同用户 ID 分别统计各自每分钟的点击量。
+由于本案例稍微有些复杂，因此需要做一些前置准备 —— 数据模拟器和监控脚本 —— 然后再开始运行实时计算。
 
-> 待补充
+### 4.1、准备1：数据模拟器
+
+首先，请保证 kafka 服务是正常运行的，且映射到 localhost:9092 。
+
+在 `4_window` 目录下的 `kafka_producer.py` 脚本，提供了数据模拟器的功能。
+
+它会往 kafka 服务的 user_action 主题里，每秒写入 20 条模拟数据，数据格式为 json 字符串，如下：
+
+```json
+{
+  "ts": "2020-01-01 01:01:01",  # 当前时间
+  "name": "李华",  # 姓名
+  "sex": "男",  # 性别，60%概率为“男”，40%概率为“女”
+  "action": "click",  # 动作，90%概率为“click”，10%概率为“scroll”
+  "is_delete": 0,  # 是否要丢弃，90%概率为“0”（不丢弃），10%概率为1“丢弃”
+}
+```
+
+为了使得最后的结果不至于太平均，只初始化了 50 个用户，该 50 个用户有不同的概率来产生上面的数据。
+
+运行命令如下：
+
+```bash
+python kafka_producer.py
+```
+
+### 4.2、准备2：kafka 监控
+
+Flink 脚本会从 source 表里读取数据，经过实时计算后将结果写入 sink 表，其中 source 表与 sink 表分别对应着 kafka 的不同主题。
+
+启动 2 个终端，其中一个用于监控 source 表（主题为 user_action ）
+```basg
+python source_monitor.py
+``` 
+
+可以看到有源源不断的数据被打印出来，如果觉得太多，可以终止该任务。
+
+另一个终端用于监控 sink 表（主题为 click_rank ）
+```basg
+python sink_monitor.py
+``` 
+
+sink_monitor.py 脚本会将排行榜结果进行实时打印，当前还没有运行 Flink 作业，所以没有结果。
+
+### 4.3、准备3：聚合函数
+
+在 PyFlink 1.11.2 版本，还不支持用 Python 直接编写聚合函数（ UDAF ），因此需要先用 java 来编写聚合函数，然后以 jar 包的形式导入到 python 中。
+
+本案例提供了 `flink-udf-1.0-SNAPSHOT.jar` UDF 包，内置了如下几种开箱即用的 UDF 或 UDTF:
+1. JavaUpper：使用 java 的 String.toUpperCase 将字符串中的小写字母转大写，用法为 `JavaUpper(s)`。
+1. Top2：继承自 TableAggregateFunction，用于 groupby 后统计最大的 2 个数，可参考 [表值聚合函数](https://ci.apache.org/projects/flink/flink-docs-release-1.11/zh/dev/table/functions/udfs.html#%E8%A1%A8%E5%80%BC%E8%81%9A%E5%90%88%E5%87%BD%E6%95%B0) ，用法为 `Top2(value)`。
+1. TopN：本次案例的主角，继承自 AggregateFunction，用于 groupby 后统计出现次数最多的 N 个名称及其出现次数，并将结果拼接为字符串（如 `"{\"name1\":count1}, {\"name2\":count2}, ..."`），用法为 `TopN(name, N, 1)`，其中 N 是 TopN 里的 N，为固定值。
+1. WeightedAvg：继承自 AggregateFunction，用于 groupby 后统计出加权平均值，用法为 `WeightedAvg(value, weight)`。
+
+如果还要自行开发 udf 的话，可以参考 4_window/java_udf 目录，在 src/main/java/com/flink/udf 下编写 java 脚本，具体写法此处不赘述。
+
+udf 开发完之后，在 java_udf 的根路径下，使用 maven 进行打包：
+
+```bash
+mvn clean package
+```
+
+几秒之后，打包完的 jar 包会在当前目录新生成一个 target 文件夹，名为 flink-udf-1.0-SNAPSHOT.jar ，拷贝出来放在 4_window 下面即可替换掉原来的 flink-udf-1.0-SNAPSHOT.jar 即可。
+
+### 4.4、运行
+
+首先请确保本地的 jobmanager 已启动，并映射到 localhost:8081 。
+
+本次待运行的脚本是 stream11.py ，运行命令如下：
+
+```bash
+flink run -m localhost:8081 -py stream11.py
+```
+
+运行之后，可以在 [localhost:8081](localhost:8081) 看到提交的 flink 作业。
+
+同时，可以在前面运行 sink_monitor.py 监控脚本的终端里看到实时更新的排行榜数据。此处为了简化显示，排行榜只看 top5，如下:
+
+```bash
+=== 男 ===
+刘备    80
+张飞    72
+韩信    70
+关云长  30
+曹操    23
+=== 女 == 
+大乔    60
+小乔    55
+貂蝉    32
+甄宓    13
+蔡琰    4
+```
+
+下面对 stream11.py 脚本里的重要内容做一下说明。
+
+首先，要使用 TopN 聚合函数，注册步骤为 3 步，如下所示：
+
+```python
+import os
+from pyflink.datastream import StreamExecutionEnvironment
+from pyflink.table import StreamTableEnvironment, EnvironmentSettings
+
+# 第一步：初始化流处理环境，注意此处一定要指定 StreamExecutionEnvironment，否则无法导入 java 函数
+env = StreamExecutionEnvironment.get_execution_environment()
+env_settings = EnvironmentSettings.new_instance().in_streaming_mode().use_blink_planner().build()
+t_env = StreamTableEnvironment.create(env, environment_settings=env_settings)
+
+# 第二步：导入 jar 包依赖
+dir_java_udf = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'flink-udf-1.0-SNAPSHOT.jar')
+t_env.get_config().get_configuration().set_string("pipeline.classpaths", 'file://' + dir_java_udf)
+
+# 第三步，注册 java 函数，命名为 getTopN
+t_env.register_java_function('getTopN', 'com.flink.udf.TopN')
+```
+
+getTopN 函数的使用就跟 mysql 里的 sum 等函数差不多。
+
+本次希望实现一个排行榜的功能，滑动窗口宽度为 1 分钟（即对过去的 1 分钟数据进行统计），窗口滑动步长为 1 秒（即每 1 秒更新一次统计结果），同时还希望可以区分男女，因此在聚合的时候，要对窗口和性别同时进行聚合。
+
+有 2 种方式来实现：
+1. 基于 SQL API:
+    1. 在 GROUP BY 里使用 HOP 滑动窗口函数，入参分别为：时间戳、滑动步长、窗口长度
+    1. 在 SELECT 里使用 HOP_START 和 HOP_END 来获得滑动窗口的开始时间和结束时间
+1. 基于 Table API:
+    1. 创建长度为 60 秒、滑动步长为 1 秒的滑动窗口 slide_window ，并重命名为 w
+    1. 使用 w.start, w.end 来获得滑动窗口的开始时间与结束时间
+
+两种的具体实现，均已在 stream11.py 脚本里，可自行查阅。
 
 通过本案例，可以学到：
-1. 如何使用窗口函数。
+1. 如何导入 java 依赖包。
+1. 如何调整流处理环境的初始化，来注册自定义的 java 聚合函数。
+1. 如何在滑动窗口中使用聚合函数。
 
 ## 5、多流 join
 
