@@ -17,6 +17,20 @@ env_settings = EnvironmentSettings.new_instance().in_batch_mode().use_blink_plan
 t_env = BatchTableEnvironment.create(environment_settings=env_settings)
 t_env.get_config().get_configuration().set_boolean("python.fn-execution.memory.managed", True)
 
+# ########################### 指定 python 依赖 ###########################
+# 可以在当前目录下看到 requirements.txt 依赖文件。
+
+# 方式 1：指定包含依赖项的安装包的目录，它将被上传到集群以支持离线安装
+# 路径可以是绝对路径或相对路径，但注意路径前面不需要 file://
+dir_requirements = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'requirements.txt')
+dir_cache = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'cached_dir')
+t_env.set_python_requirements(dir_requirements, dir_cache)
+# t_env.set_python_requirements('requirements.txt', 'cached_dir')
+
+# 方式 2：指定描述依赖的依赖文件 requirements.txt，作业运行时下载，不推荐。
+# dir_requirements = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'requirements.txt')
+# t_env.set_python_requirements(dir_requirements)
+
 # ########################### 创建源表(source) ###########################
 
 dir_log = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'syslog.text')
@@ -46,6 +60,7 @@ if os.path.exists(dir_result):
 t_env.connect(FileSystem().path(dir_result)) \
     .with_format(OldCsv()
                  .field('topic', DataTypes.STRING())
+                 .field('fake_country', DataTypes.STRING())
                  .field('ip_src', DataTypes.STRING())
                  .field('ip_host', DataTypes.STRING())
                  .field('user_name', DataTypes.STRING())
@@ -54,6 +69,7 @@ t_env.connect(FileSystem().path(dir_result)) \
                  .field('msg_time', DataTypes.STRING())) \
     .with_schema(Schema()
                  .field('topic', DataTypes.STRING())
+                 .field('fake_country', DataTypes.STRING())
                  .field('ip_src', DataTypes.STRING())
                  .field('ip_host', DataTypes.STRING())
                  .field('user_name', DataTypes.STRING())
@@ -64,6 +80,14 @@ t_env.connect(FileSystem().path(dir_result)) \
 
 
 # ########################### 注册 UDF ###########################
+
+@udf(input_types=[], result_type=DataTypes.STRING())
+def get_fake_country():
+    # 随机生成国家
+    import faker
+
+    return faker.Faker(locale='zh_CN').country()
+
 
 @udf(input_types=[DataTypes.STRING()], result_type=DataTypes.STRING())
 def get_topic(line):
@@ -219,6 +243,7 @@ t_env.register_function('get_user_name', get_user_name)
 t_env.register_function('get_user_group', get_user_group)
 t_env.register_function('get_msg_content', get_msg_content)
 t_env.register_function('get_msg_time', get_msg_time)
+t_env.register_function('get_fake_country', get_fake_country)  # 获得虚假的国家
 
 # ########################### 批处理任务 ###########################
 
@@ -226,6 +251,7 @@ t_env.register_function('get_msg_time', get_msg_time)
 t_env.from_path('source') \
     .select('line, get_topic(line) AS topic') \
     .select('topic, '
+            'get_fake_country() AS fake_country, '
             'get_ip_src(topic, line) AS ip_src, '
             'get_ip_host(line) AS ip_host, '
             'get_user_name(topic, line) AS user_name, '

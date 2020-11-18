@@ -1,0 +1,2 @@
+# PyFlink UDF 里用到的三方依赖包
+faker==4.14.2

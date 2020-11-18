@@ -11,6 +11,7 @@ log/
 dbs/
 target/
 venv/
+cached_dir/
 
 .coverage
 .DS_Store
