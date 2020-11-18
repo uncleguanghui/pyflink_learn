@@ -69,7 +69,7 @@ alias flink='/usr/local/Cellar/apache-flink/1.11.2/libexec/bin/flink'
 
 首先，安装 [docker](https://www.docker.com/) 。
 
-然后，启动 docker 编排服务：
+然后，在本教程的项目根目录下，启动 docker 编排服务：
 
 ```bash
 # windows 系统先加下面这句
@@ -89,8 +89,10 @@ df80ca04755d        zookeeper:3.6.2                 "/docker-entrypoint.…"   5
 ```
 
 解释下各容器的作用：
-* mysql + admin：2 个 mysql 容器，其中 mysql1 容器作为待同步的数据源，mysql2 容器作为备份的数仓，admin 容器允许我们使用网页来查看和操作 mysql 容器（只是以防万一本地没有安装 mysql 客户端）。
-* kafka + zookeeper：kafka 是高吞吐低延迟的消息中间件，常在业务系统中使用，不理解的话就可以简单地当成数据仓库，是实时流计算必备的组件，本教程里会指定不同的主题（topic）来分别实时存储原始数据和结果数据。zookeeper 常常和 kafka 结合一起使用，用于管理 kafka 的 broker，以及实现负载均衡，简单理解就是让 kafka 更加高效。
+* mysql + admin：案例 3 会用到。共有 2 个 mysql 容器，其中 mysql1 容器作为待同步的数据源，mysql2 容器作为备份的数仓，admin 容器允许我们使用网页来查看和操作 mysql 容器（只是以防万一本地没有安装 mysql 客户端）。
+* kafka + zookeeper：案例 4 会用到。kafka 是高吞吐低延迟的消息中间件，常在业务系统中使用，不理解的话就可以简单地当成数据仓库，是实时流计算必备的组件，本教程里会指定不同的主题（topic）来分别实时存储原始数据和结果数据。zookeeper 常常和 kafka 结合一起使用，用于管理 kafka 的 broker，以及实现负载均衡，简单理解就是让 kafka 更加高效。
+
+PS：MySQL 的账号密码都是 root。
 
 很简单地，我们完成了环境的搭建。
 
@@ -125,7 +127,7 @@ PyFlink 要求 python 版本为 3.5、3.6 或 3.7，否则会出错。
 - [x] 1、`批处理 Word Count`：教你如何使用 PyFlink 来进行批处理，如何使用 Table API 和 SQL API 来实现 groupby，以及如何读取文件系统（本案例是基于本地）上的文件并在处理后存储到另个文件系统（本案例还是本地）~
 - [x] 2、`自定义函数 UDF`：教你如何在 PyFlink 中使用 UDF（ 用户自定义的函数 ）来实现复杂的计算逻辑。
 - [x] 3、`实时 CDC`：教你如何使用 PyFlink 搭建实时数仓，即从业务数仓（本案例是 mysql1 ）实时补货 binlog 中的数据变更，并 upsert 到备份数仓（本案例是 mysql2 ）。
-- [x] 4、`有状态流处理`：教你如何使用 PyFlink 来实现一个实时排行榜，如何在 python 环境中使用基于 java 编写的聚合函数，如何基于滑动窗口实现数据的过滤和统计。
+- [x] 4、`有状态流处理`：教你如何使用 PyFlink 来实现一个基于 Kafka 的实时排行榜，如何在 python 环境中导入和使用 java 编写的聚合函数 jar 包，并基于滑动窗口实现数据的过滤和统计。
 - [ ] 5、`多流 join`：教你如何使用 PyFlink 来同时接受多个数据源的数据，并进行实时流处理，该场景常见于 AI 算法的实时特征生成。
 
 

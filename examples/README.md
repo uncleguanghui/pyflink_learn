@@ -1,10 +1,8 @@
 # PyFlink 从入门到精通
 
-* [1、批处理 Word Count](#1批处理-Word-Count)
-* [2、自定义函数 UDF](#2自定义函数-UDF)
-* [3、实时 CDC](#3实时-CDC)
-    * [3.1、MySQL CDC](#31MySQL-CDC)
-    * [3.2、Kafka 同步到多数据源](#32Kafka-同步到多数据源)
+* [1、批处理 Word Count](#1批处理-word-count)
+* [2、自定义函数 UDF](#2自定义函数-udf)
+* [3、实时 MySQL CDC](#3实时-mysql-cdc)
 * [4、有状态流处理](#4、有状态流处理)
     * [4.1、准备1：数据模拟器](#41准备1数据模拟器)
     * [4.2、准备2：kafka 监控](#42准备2kafka-监控)
@@ -33,17 +31,24 @@ Flink 是目前非常火热的流处理框架，可以很好地实现批流一�
 1. 阅读每个案例的代码，理解每个部分的作用。
 1. 阅读每个案例的代码头部文档里提到的扩展阅读，加深理解。
 
+再次强调，在运行前，先检查：
+1. Python 版本是否是 3.5、3.6 或 3.7。
+1. Docker 是否已经启动，MySQL、Kafka、Zookeeper 容器是否正在运行。
+1. Flink 是否正确安装。
+
 ## 1、批处理 Word Count
 
 该案例展示了如何用 Flink 做批处理，统计指定文件下的单词数，并将统计结果写入到新的文件下。
 
 ![数据流向图](images/image1.jpg)
 
-运行命令为：
+cd 到 `examples/1_word_count` 路径下，运行命令为：
 
-```bash
-sh run.sh examples/1_word_count/batch.py
 ```
+flink run -m localhost:8081 -py batch.py
+```
+
+很快就能运行完，登录 [http://localhost:8081](http://localhost:8081) 应该可以看到有个已经完成的任务。
 
 `batch.py` 批处理脚本执行逻辑是：
 1. 首先，创建 Blink 批处理环境。（关于 Blink 和 Flink 的区别，见脚本 `1_word_count/batch.py` 的文件头）。
@@ -80,12 +85,13 @@ pyflink,2
 
 ![数据流向图](images/image2.jpg)
 
+cd 到 `examples/2_udf` 路径下，运行命令为：
 
-运行命令为：
-
-```bash
-sh run.sh examples/2_udf/batch.py
 ```
+flink run -m localhost:8081 -py batch.py
+```
+
+很快就能运行完，登录 [http://localhost:8081](http://localhost:8081) 应该可以看到有个已经完成的任务。
 
 运行后的结果写到了同级目录下的 result.csv 中：
 
@@ -100,15 +106,15 @@ syslog-user,172.25.0.2,10.200.80.1,root,root,vim /etc/my.cnf,2020-10-28 14:28:06
 1. 如何创建并注册 UDF 。
 2. 如何使用 UDF 。
 
-## 3、实时 CDC
+## 3、实时 MySQL CDC
 
-该案例展示了如何用 Flink 进行数据库的实时同步。
-
-### 3.1、MySQL CDC
+该案例展示了如何用 Flink 进行 MySQL 数据库的实时同步。
 
 > **业务场景**
 > 
 > 监听 MySQL 的 binlog 数据变更，并实时同步到另一个 MySQL。
+
+![数据流向图](images/image3.jpg)
 
 `CDC` 是 `change data capture`，即变化数据捕捉。CDC 是数据库进行备份的一种方式，常用于大量数据的备份工作。
 
@@ -124,45 +130,32 @@ MySQL 基于日志的 CDC 就是要开启 mysql 的 binlog（ binary log ）。
 show variables like '%log_bin%';
 ```
 
-`3_database_sync/stream.py` 实时同步脚本通过下面 3 个 Jar 包，实现了 MySQL CDC。
-1. flink-connector-jdbc_2.11-1.11.2.jar：通过 JDBC 连接器来从数据库里读取或写入数据。
+为了在 Flink 中实现 MySQL 的 CDC，我们需要准备下面 3 个 jar 包（案例文件夹下面有）。
+1. flink-connector-jdbc_2.11-1.11.2.jar：通过 JDBC 连接器来从 MySQL 里读取或写入数据。
 2. flink-sql-connector-mysql-cdc-1.1.0.jar：通过 MySQL-CDC 连接器从 MySQL 的 binlog 里提取更改。
 3. mysql-connector-java-5.1.49.jar：JDBC 连接器的驱动（ 帮助 java 连接 MySQL ）。
 
-需要注意的是：
+关于 jar 包的使用：
 1. 创建 source 表的时候，定义连接器为 mysql-cdc ，写法请参照 [文档](https://ci.apache.org/projects/flink/flink-docs-stable/zh/dev/table/connectors/jdbc.html) 。
 1. 创建 sink 表的时候，定义连接器为 jdbc，写法请参照 [文档](https://github.com/ververica/flink-cdc-connectors) 。
 1. 由于 source 表可能有更新或删除，因此只能使用 upsert 模式来实现实时同步，该模式要求 sink 表里设置主键（ primary key）。
 
-![数据流向图](images/image3.jpg)
+好了，简单介绍完 CDC，让我们进入正文。
 
+cd 到 `examples/3_database_sync` 路径下，运行命令为：
 
-运行命令为：
-
-```bash
-sh run.sh examples/3_database_sync/stream.py
 ```
+python stream.py
+```
+
+PS：如果像前面案例一样使用 flink run 运行的话，会报错：`Caused by: java.lang.NoSuchMethodError: 'void sun.misc.Unsafe.monitorEnter(java.lang.Object)'`，暂时没有找到解决方法。。
+
+如果本地有 MySQL 客户端，可以同时连接 3306 和 3307 这两个端口（账密都是 root）。在 3306 对应的实例上的 flink 数据库的 case3 这张表里做相应的增删改，然后看看 3307 对应的同名的表里，是否已经实时同步了数据。
 
 通过本案例，可以学到：
 1. 如何创建流处理环境。
 2. 如何使用各类 connector ，以及如何管理在 pyflink 脚本中指定 jar 依赖。
 3. 如何实现实时数仓的数据同步。
-
-### 3.2、Kafka 同步到多数据源
-
-> **业务场景**
-> 
-> 对于 kafka 里的 json 格式的线上日志，进行无状态的解析计算，并将结果同步到多个数据库 —— 如 Hive、MySQL。
-
-运行命令为：
-
-```bash
-flink run -m localhost:8081 -py stream11.py
-```
-
-通过本案例，可以学到：
-1. 如何将数据同步到多个数据源。
-1. 如何对实时同步进行优化。
 
 ## 4、有状态流处理
 
@@ -214,11 +207,12 @@ python source_monitor.py
 可以看到有源源不断的数据被打印出来，如果觉得太多，可以终止该任务。
 
 另一个终端用于监控 sink 表（主题为 click_rank ）
-```basg
+
+```bash
 python sink_monitor.py
 ``` 
 
-sink_monitor.py 脚本会将排行榜结果进行实时打印，当前还没有运行 Flink 作业，所以没有结果。
+`sink_monitor.py` 脚本会将排行榜结果进行实时打印，当前还没有运行 Flink 作业，所以没有结果。
 
 ### 4.3、准备3：聚合函数
 
@@ -242,17 +236,17 @@ mvn clean package
 
 ### 4.4、运行
 
-首先请确保本地的 jobmanager 已启动，并映射到 localhost:8081 。
-
-本次待运行的脚本是 stream11.py ，运行命令如下：
+cd 到 `examples/4_window` 路径下，运行命令为：
 
 ```bash
 flink run -m localhost:8081 -py stream11.py
 ```
 
-运行之后，可以在 [localhost:8081](localhost:8081) 看到提交的 flink 作业。
+运行之后，可以在 [localhost:8081](localhost:8081) 看到提交的名为 `Top10 User Click` 的 flink 作业。
 
-同时，可以在前面运行 sink_monitor.py 监控脚本的终端里看到实时更新的排行榜数据。此处为了简化显示，排行榜只看 top5，如下:
+PS: control + C 不能彻底终止脚本，因为脚本已经提交了，需要在 [localhost:8081](localhost:8081) 里点击对应的 job 然后再点击右上角的 Cancel Job 才算彻底终止。
+
+同时，可以在前面运行 `sink_monitor.py` 监控脚本的终端里看到实时更新的排行榜数据。此处为了简化显示，排行榜只看 top5，如下:
 
 ```bash
 === 男 ===
@@ -269,7 +263,7 @@ flink run -m localhost:8081 -py stream11.py
 蔡琰    4
 ```
 
-下面对 stream11.py 脚本里的重要内容做一下说明。
+下面对 `stream11.py` 脚本里的重要内容做一下说明。
 
 首先，要使用 TopN 聚合函数，注册步骤为 3 步，如下所示：
 
@@ -303,7 +297,7 @@ getTopN 函数的使用就跟 mysql 里的 sum 等函数差不多。
     1. 创建长度为 60 秒、滑动步长为 1 秒的滑动窗口 slide_window ，并重命名为 w
     1. 使用 w.start, w.end 来获得滑动窗口的开始时间与结束时间
 
-两种的具体实现，均已在 stream11.py 脚本里，可自行查阅。
+两种的具体实现，均已在 `stream11.py` 脚本里，可自行查阅。
 
 通过本案例，可以学到：
 1. 如何导入 java 依赖包。

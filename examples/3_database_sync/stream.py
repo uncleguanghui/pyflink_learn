@@ -73,8 +73,6 @@ t_env.execute_sql(f"""
 
 # ########################### 批处理任务 ###########################
 
-# 基于 SQL API
-
 # 方式1
 t_env.from_path('source').insert_into('sink')
 
