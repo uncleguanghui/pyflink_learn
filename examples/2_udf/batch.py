@@ -19,17 +19,19 @@ t_env.get_config().get_configuration().set_boolean("python.fn-execution.memory.m
 
 # ########################### 指定 python 依赖 ###########################
 # 可以在当前目录下看到 requirements.txt 依赖文件。
+# 运行下述命令，成包含有安装包的 cached_dir 文件夹
+# pip download -d cached_dir -r requirements.txt --no-binary :all:
 
-# 方式 1：指定包含依赖项的安装包的目录，它将被上传到集群以支持离线安装
-# 路径可以是绝对路径或相对路径，但注意路径前面不需要 file://
 dir_requirements = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'requirements.txt')
 dir_cache = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'cached_dir')
-t_env.set_python_requirements(dir_requirements, dir_cache)
-# t_env.set_python_requirements('requirements.txt', 'cached_dir')
-
-# 方式 2：指定描述依赖的依赖文件 requirements.txt，作业运行时下载，不推荐。
-# dir_requirements = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'requirements.txt')
-# t_env.set_python_requirements(dir_requirements)
+if os.path.exists(dir_requirements):
+    if os.path.exists(dir_cache):
+        # 方式 1：指定包含依赖项的安装包的目录，它将被上传到集群以支持离线安装
+        # 路径可以是绝对路径或相对路径，但注意路径前面不需要 file://
+        t_env.set_python_requirements(dir_requirements, dir_cache)
+    else:
+        # 方式 2：指定描述依赖的依赖文件 requirements.txt，作业运行时下载，不推荐。
+        t_env.set_python_requirements(dir_requirements)
 
 # ########################### 创建源表(source) ###########################
 

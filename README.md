@@ -123,20 +123,31 @@ PyFlink 要求 python 版本为 3.5、3.6 或 3.7，否则会出错。
 
 一切 ready 后，就完成本地 PyFilnk 开发与测试环境的搭建，让我们开始正题。
 
-本教程目前提供了 6 个案例，如果是新手的话，建议按顺序来学习：
-- [x] 1、`批处理 Word Count`：教你如何使用 PyFlink 来进行批处理，如何使用 Table API 和 SQL API 来实现 groupby，以及如何读取文件系统（本案例是基于本地）上的文件并在处理后存储到另个文件系统（本案例还是本地）~
-- [x] 2、`自定义函数 UDF`：教你如何在 PyFlink 中导入 python 的三方依赖包，并结合 UDF（ 用户自定义的函数 ）来实现复杂的计算逻辑。
-- [x] 3、`实时 CDC`：教你如何使用 PyFlink 搭建实时数仓，即从业务数仓（本案例是 mysql1 ）实时补货 binlog 中的数据变更，并 upsert 到备份数仓（本案例是 mysql2 ）。
-- [x] 4、`有状态流处理`：教你如何使用 PyFlink 来实现一个基于 Kafka 的实时排行榜，如何在 python 环境中导入和使用 java 编写的聚合函数 jar 包，并基于滑动窗口实现数据的过滤和统计。
-- [ ] 5、`多流 join`：教你如何使用 PyFlink 来同时接受多个数据源的数据，并进行实时流处理，该场景常见于 AI 算法的实时特征生成。
+教程正文： [PyFlink 从入门到精通](examples/README.md)，代码在 `examples` 目录下可以看到。
 
-
-除了第 5 个案例待实现，其他每个案例的详情，见教程正文： [PyFlink 从入门到精通](examples/README.md)，代码在 `examples` 目录下可以看到。
+本教程目前提供了 5 个案例，如果是新手的话，建议按顺序来学习：
+- [x] 1、`批处理 Word Count`：
+    - 教你如何使用 PyFlink 来进行批处理
+    - 如何使用 Table API 和 SQL API 来实现 groupby 处理逻辑
+    - 如何读取文件系统（如本地）上的文件并在处理后存储到另个文件系统（本案例还是本地）
+- [x] 2、`自定义函数 UDF`：
+    - 教你如何在 PyFlink 中导入 python 的三方依赖包
+    - 如何结合 UDF（ 用户自定义的函数 ）来实现复杂的计算逻辑
+- [x] 3、`实时 CDC`：
+    - 教你如何使用 PyFlink 搭建实时数仓
+    - 如何从业务数仓（本案例是 mysql1 ）实时捕获 binlog 中的数据变更，并 upsert 到备份数仓（本案例是 mysql2 ）
+- [x] 4、`有状态流处理`：
+    - 教你如何使用 PyFlink 来实现一个基于 Kafka 的实时排行榜
+    - 如何在 python 环境中导入和使用 java 编写的聚合函数 jar 包
+    - 如何基于滑动窗口实现数据的过滤和统计
+- [x] 5、`在线机器学习 Online Machine Learning`：
+    - 教你如何使用 PyFlink 来进行在线机器学习
+    - 如何加载模型和准实时保存模型
+    - 如何定义和管理不同类型的指标 Metric
+    - 如何在 web 页面上实时查看指标，了解算法的运行情况
 
 运行的方法也很简单，对于每个案例，cd 到案例目录下后，运行下面的脚本（xx 换成对应的脚本名称）即可运行。
 
 ```
 flink run -m localhost:8081 -py xxx.py
 ```
-
-flink run -m localhost:8081 -py stream.py

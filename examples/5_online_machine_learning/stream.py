@@ -3,6 +3,7 @@
 """
 
 import os
+from datetime import datetime
 from pyflink.datastream import StreamExecutionEnvironment
 from pyflink.table import StreamTableEnvironment, EnvironmentSettings, DataTypes
 from pyflink.table.udf import ScalarFunction, udf
@@ -27,31 +28,34 @@ dir_kafka_sql_connect = os.path.join(os.path.abspath(os.path.dirname(__file__)),
                                      'flink-sql-connector-kafka_2.11-1.11.2.jar')
 t_env.get_config().get_configuration().set_string("pipeline.jars", 'file://' + dir_kafka_sql_connect)
 
-
 # ########################### 指定 python 依赖 ###########################
 # 可以在当前目录下看到 requirements.txt 依赖文件。
+# 运行下述命令，成包含有安装包的 cached_dir 文件夹
+# pip download -d cached_dir -r requirements.txt --no-binary :all:
 
-# 方式 1：指定包含依赖项的安装包的目录，它将被上传到集群以支持离线安装
-# 路径可以是绝对路径或相对路径，但注意路径前面不需要 file://
-# dir_requirements = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'requirements.txt')
-# dir_cache = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'cached_dir')
-# t_env.set_python_requirements(dir_requirements, dir_cache)
+dir_requirements = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'requirements.txt')
+dir_cache = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'cached_dir')
+if os.path.exists(dir_requirements):
+    if os.path.exists(dir_cache):
+        # 方式 1：指定包含依赖项的安装包的目录，它将被上传到集群以支持离线安装
+        # 路径可以是绝对路径或相对路径，但注意路径前面不需要 file://
+        t_env.set_python_requirements(dir_requirements, dir_cache)
+    else:
+        # 方式 2：指定描述依赖的依赖文件 requirements.txt，作业运行时下载，不推荐。
+        t_env.set_python_requirements(dir_requirements)
 
-
-# t_env.set_python_requirements('requirements.txt', 'cached_dir')
-
-# 方式 2：指定描述依赖的依赖文件 requirements.txt，作业运行时下载，不推荐。
-# dir_requirements = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'requirements.txt')
-# t_env.set_python_requirements(dir_requirements)
 
 # ########################### 注册 UDF ###########################
 
 class Model(ScalarFunction):
     def __init__(self):
-        from sklearn.linear_model import SGDClassifier
+        # 加载模型
+        self.model_name = 'online_ml_model'
+        self.redis_params = dict(host='localhost', password='redis_password', port=6379, db=0)
+        self.clf = self.load_model()
 
-        # 初始化模型
-        self.clf = SGDClassifier(alpha=0.01, loss='log', penalty='l1')
+        self.interval_dump_seconds = 30  # 模型保存间隔时间为 30 秒
+        self.last_dump_time = datetime.now()  # 上一次模型保存时间
 
         # y 的定义域
         self.classes = list(range(10))
@@ -102,6 +106,7 @@ class Model(ScalarFunction):
         # 在线学习，即逐条训练模型
         # 需要把一维数据转成二维的，即在 x 和 y 外层再加个列表
         self.clf.partial_fit([x], [y], classes=self.classes)
+        self.dump_model()  # 保存模型到 redis
 
         # 预测当前
         y_pred = self.clf.predict([x])[0]
@@ -116,6 +121,49 @@ class Model(ScalarFunction):
 
         # 返回预测结果
         return y_pred
+
+    def load_model(self):
+        """
+        加载模型，如果 redis 里存在模型，则优先从 redis 加载，否则初始化一个新模型
+        :return:
+        """
+        import redis
+        import pickle
+        import logging
+        from sklearn.linear_model import SGDClassifier
+
+        r = redis.StrictRedis(**self.redis_params)
+        clf = None
+
+        try:
+            clf = pickle.loads(r.get(self.model_name))
+        except TypeError:
+            logging.info('Redis 内没有指定名称的模型，因此初始化一个新模型')
+        except (redis.exceptions.RedisError, TypeError, Exception):
+            logging.warning('Redis 出现异常，因此初始化一个新模型')
+        finally:
+            clf = clf or SGDClassifier(alpha=0.01, loss='log', penalty='l1')
+
+        return clf
+
+    def dump_model(self):
+        """
+        当距离上次尝试保存模型的时刻过了指定的时间间隔，则保存模型
+        :return:
+        """
+        import pickle
+        import redis
+        import logging
+
+        if (datetime.now() - self.last_dump_time).seconds >= self.interval_dump_seconds:
+            r = redis.StrictRedis(**self.redis_params)
+
+            try:
+                r.set(self.model_name, pickle.dumps(self.clf, protocol=pickle.HIGHEST_PROTOCOL))
+            except (redis.exceptions.RedisError, TypeError, Exception):
+                logging.warning('无法连接 Redis 以存储模型数据')
+
+            self.last_dump_time = datetime.now()  # 无论是否更新成功，都更新保存时间
 
 
 model = udf(Model(), input_types=[DataTypes.ARRAY(DataTypes.INT()), DataTypes.TINYINT()],
