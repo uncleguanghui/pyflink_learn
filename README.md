@@ -139,3 +139,4 @@ PyFlink 要求 python 版本为 3.5、3.6 或 3.7，否则会出错。
 flink run -m localhost:8081 -py xxx.py
 ```
 
+flink run -m localhost:8081 -py stream.py

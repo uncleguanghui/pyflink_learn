@@ -83,7 +83,7 @@ def write_data():
             break
 
         # 停止时间
-        sleep(random.random() / max_msg_per_second)
+        sleep(1 / max_msg_per_second)
 
 
 write_data()

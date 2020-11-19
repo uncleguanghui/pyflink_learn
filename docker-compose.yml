@@ -11,6 +11,8 @@ services:
       - /etc/localtime:/etc/localtime      ## kafka 镜像和宿主机器之间时间保持一致
     ports:
       - "9092:9092"                        ## 对外暴露的 kafka 端口号
+    depends_on:
+      - zookeeper
     environment:
       KAFKA_ADVERTISED_HOST_NAME: localhost
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
@@ -55,7 +57,6 @@ services:
     container_name: mysql2
   adminer:
     image: adminer
-    restart: always
     ports:
       - 8080:8080
     container_name: adminer

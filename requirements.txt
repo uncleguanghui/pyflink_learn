@@ -3,3 +3,4 @@ kafka-python>=2.0.2
 faker>=4.16.0
 numpy>=1.16.3
 reprint>=0.5.2
+scikit-learn>=0.23.2

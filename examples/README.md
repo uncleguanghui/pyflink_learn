@@ -38,9 +38,13 @@ Flink 是目前非常火热的流处理框架，可以很好地实现批流一�
 
 ## 1、批处理 Word Count
 
-该案例展示了如何用 Flink 做批处理，统计指定文件下的单词数，并将统计结果写入到新的文件下。
+> **业务场景**
+> 
+> 通过 Flink 对文件存储系统里的数据进行离线批处理，并将结果存储到其他文件下同下。
 
 ![数据流向图](images/image1.jpg)
+
+该案例展示了如何用 Flink 做批处理，统计指定文件下的单词数，并将统计结果写入到新的文件下。
 
 cd 到 `examples/1_word_count` 路径下，运行命令为：
 
@@ -76,35 +80,55 @@ pyflink,2
 
 > **业务场景**
 > 
-> 通过 Flink 对系统上报的 syslog 进行实时解析并生成告警，搭建实时监控告警系统。
+> 通过 Flink 对系统上报的日志进行实时解析并生成告警，搭建实时监控告警系统。
 
-该案例是对线上实时监控告警的一小部分进行了改造（线上是流处理，本案例改成了批处理），展示了如何用 Flink 管理自定义函数 UDF，来实现复杂的日志解析逻辑。
+![数据流向图](images/image2.jpg)
+
+该案例是对线上实时监控告警的一小部分进行了改造（线上是流处理，本案例改成了批处理），展示了如何在 Flink 中使用自定义函数 UDF 、三方的依赖包，来实现复杂的日志解析逻辑。
 
 同时，本案例也是 [官方文档](https://ci.apache.org/projects/flink/flink-docs-master/zh/dev/python/table-api-users-guide/udfs/python_udfs.html)
 里的标量函数（ Scalar Function ）的一个简单实现，在 PyFlink 1.11 里的 UDF 已经比较强大了，更多技巧请前往官方文档进行学习。
 
-![数据流向图](images/image2.jpg)
+本案例中，除了使用了自定义函数 UDF ，还使用了三方包 faker，因此需要额外提供一个描述依赖的文件 `requirements.txt` 。官方文档提供了两种方式来导入：
 
-cd 到 `examples/2_udf` 路径下，运行命令为：
+```python
+# 方式1：直接传入 requirements.txt ，当集群可以联网时，会下载这些依赖项
+t_env.set_python_requirements("requirements.txt")
 
+# 方式2：当集群不能联网时，可以先准备好一个由 requirements.txt 生成的包含有安装包的依赖文件夹 cached_dir ，集群会离线安装这些依赖项
+t_env.set_python_requirements("requirements.txt", "cached_dir")
 ```
+
+方式 2 相比于方式 1 有两点好处：
+1. 将依赖下载与作业执行解耦，提高了作业执行的效率。
+1. 依赖项的安装包预先下载好，适用于集群不能联网的情况。
+
+首先，cd 到 `examples/2_udf` 路径下，生成包含有安装包的 cached_dir 文件夹：
+
+```bash
+pip download -d cached_dir -r requirements.txt --no-binary :all:
+```
+
+然后，运行命令以提交批处理作业：
+
+```bash
 flink run -m localhost:8081 -py batch.py
 ```
 
-很快就能运行完，登录 [http://localhost:8081](http://localhost:8081) 应该可以看到有个已经完成的任务。
+登录 [http://localhost:8081](http://localhost:8081) 可以看到有个正在运行的任务，大约半分钟左右运行完。
 
 运行后的结果写到了同级目录下的 result.csv 中：
 
 ```
-syslog-user,172.25.0.2,10.200.80.1,root,root,ls,2020-10-28 14:27:28
-syslog-user,172.25.0.2,10.200.80.1,root,root,ll,2020-10-28 14:27:31
-syslog-user,172.25.0.2,10.200.80.1,root,root,vim /etc/my.cnf,2020-10-28 14:28:06
+syslog-system,爱尔兰,,,,,,
+syslog-system,圣皮埃尔岛及密克隆岛,,,,,,
 ......
 ```
 
 通过本案例，可以学到：
 1. 如何创建并注册 UDF 。
-2. 如何使用 UDF 。
+1. 如何导入 python 的三方依赖包，并在 UDF 中使用。
+1. 如何使用 UDF 。
 
 ## 3、实时 MySQL CDC
 
