@@ -1,5 +1,8 @@
 """
 基于 Flink 实现有状态的流处理
+
+扩展阅读：
+https://ci.apache.org/projects/flink/flink-docs-release-1.11/zh/ops/config.html
 """
 
 import os
@@ -14,6 +17,7 @@ source_topic = "handwritten_digit"  # 源数据
 sink_topic = "digit_predict"  # 结果
 
 # ########################### 初始化流处理环境 ###########################
+# 更多配置的设置请参考扩展阅读 1
 
 # 创建 Blink 流处理环境，注意此处需要指定 StreamExecutionEnvironment，否则无法导入 java 函数
 env = StreamExecutionEnvironment.get_execution_environment()
@@ -21,6 +25,19 @@ env_settings = EnvironmentSettings.new_instance().in_streaming_mode().use_blink_
 t_env = StreamTableEnvironment.create(env, environment_settings=env_settings)
 # 设置该参数以使用 UDF
 t_env.get_config().get_configuration().set_boolean("python.fn-execution.memory.managed", True)
+
+# t_env.get_config().get_configuration().set_string(
+#     "metrics.scope.operator", '自定义算子名称')
+# t_env.get_config().get_configuration().set_string(
+#     "metrics.scope.task", '自定义任务名称')
+# t_env.get_config().get_configuration().set_string(
+#     "metrics.scope.jm", '自定义JM')
+# t_env.get_config().get_configuration().set_string(
+#     "metrics.scope.jm.job", '自定义Job')
+# t_env.get_config().get_configuration().set_integer(
+#     "metrics.fetcher.update-interval", 5000)  # 定义 WebUI 上的指标更新间隔（毫秒），值越小获取越频繁，但会对性能有所影响。
+# t_env.get_config().get_configuration().set_integer(
+#     "web.backpressure.cleanup-interval", 3600 * 1000)  # 定义 WebUI 上的统计信息的缓存时间（毫秒）
 
 # ########################### 指定 jar 依赖 ###########################
 

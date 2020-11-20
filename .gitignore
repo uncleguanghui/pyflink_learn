@@ -25,5 +25,6 @@ cached_dir/
 *.jl
 *.iml
 venv*
+digit*
 *result*
 dependency*

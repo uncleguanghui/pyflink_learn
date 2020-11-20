@@ -82,8 +82,9 @@ docker-compose up -d
 ```bash
 CONTAINER ID        IMAGE                           COMMAND                  CREATED             STATUS              PORTS                                                  NAMES
 32d6b6cdf30b        mysql:8.0.22                    "docker-entrypoint.s…"   5 days ago          Up 3 seconds        0.0.0.0:3306->3306/tcp, 33060/tcp                      mysql1
-b62b8d8363c3        wurstmeister/kafka:2.13-2.6.0   "start-kafka.sh"         5 days ago          Up 3 seconds        0.0.0.0:9092->9092/tcp                                 kafka
 cc8246824903        mysql:8.0.22                    "docker-entrypoint.s…"   5 days ago          Up 3 seconds        33060/tcp, 0.0.0.0:3307->3306/tcp                      mysql2
+f732effb7559        redis:6.0.9                     "docker-entrypoint.s…"   5 days ago          Up 5 seconds        0.0.0.0:6379->6379/tcp                                 redis
+b62b8d8363c3        wurstmeister/kafka:2.13-2.6.0   "start-kafka.sh"         5 days ago          Up 3 seconds        0.0.0.0:9092->9092/tcp                                 kafka
 fe2ad0230ffa        adminer                         "entrypoint.sh docke…"   5 days ago          Up 12 seconds       0.0.0.0:8080->8080/tcp                                 adminer
 df80ca04755d        zookeeper:3.6.2                 "/docker-entrypoint.…"   5 days ago          Up 3 seconds        2888/tcp, 3888/tcp, 0.0.0.0:2181->2181/tcp, 8080/tcp   zookeeper
 ```
@@ -91,8 +92,11 @@ df80ca04755d        zookeeper:3.6.2                 "/docker-entrypoint.…"   5
 解释下各容器的作用：
 * mysql + admin：案例 3 会用到。共有 2 个 mysql 容器，其中 mysql1 容器作为待同步的数据源，mysql2 容器作为备份的数仓，admin 容器允许我们使用网页来查看和操作 mysql 容器（只是以防万一本地没有安装 mysql 客户端）。
 * kafka + zookeeper：案例 4 会用到。kafka 是高吞吐低延迟的消息中间件，常在业务系统中使用，不理解的话就可以简单地当成数据仓库，是实时流计算必备的组件，本教程里会指定不同的主题（topic）来分别实时存储原始数据和结果数据。zookeeper 常常和 kafka 结合一起使用，用于管理 kafka 的 broker，以及实现负载均衡，简单理解就是让 kafka 更加高效。
+* redis：案例 5 会用到。Redis 是基于内存的高性能的非关系型 Key-Value 数据库，同时也支持存储多种数据类型，读写效率都非常高，因而非常便于在实时计算中缓存我们训练好的模型。
 
-PS：MySQL 的账号密码都是 root。
+PS，为了访问安全，在 `docker-compose.yml` 文件中可以看到我为一些组件设置了密码：
+1. MySQL 的账号密码都是 root。
+2. Redis 的密码是 redis_password。
 
 很简单地，我们完成了环境的搭建。
 
@@ -142,12 +146,16 @@ PyFlink 要求 python 版本为 3.5、3.6 或 3.7，否则会出错。
     - 如何基于滑动窗口实现数据的过滤和统计
 - [x] 5、`在线机器学习 Online Machine Learning`：
     - 教你如何使用 PyFlink 来进行在线机器学习
-    - 如何加载模型和准实时保存模型
-    - 如何定义和管理不同类型的指标 Metric
+    - 如何在 UDF 中连接 Redis，以加载模型和保存模型
+    - 如何在 UDF 中训练模型
+    - 如何在 UDF 中注册指标和计算指标
     - 如何在 web 页面上实时查看指标，了解算法的运行情况
+    - 如何开发 Flask 应用，并基于 Redis 里的最新模型提供预测服务。
 
 运行的方法也很简单，对于每个案例，cd 到案例目录下后，运行下面的脚本（xx 换成对应的脚本名称）即可运行。
 
 ```
 flink run -m localhost:8081 -py xxx.py
 ```
+
+接下来，请前往 [PyFlink 从入门到精通](examples/README.md) 吧。

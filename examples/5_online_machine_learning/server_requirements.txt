@@ -1,0 +1,5 @@
+svglib>=1.0.1
+reportlab>=3.5.55
+Flask>=1.1.1
+opencv-python>=4.4.0.46
+Pillow>=6.2.1

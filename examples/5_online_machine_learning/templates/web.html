@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1" />
+    <meta charset="UTF-8">
+    <title>手写数字预测</title>
+    <meta name="description" content="overview & stats" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+</head>
+<body>
+<li style="margin-top:20px;">
+    <label style="display:inline-block;margin-bottom: 5px;">请手写数字（ 0~9 ）：</label>
+    <div id="canvas" style="border: 1px solid #00bcbc; max-width: 200px; max-height: 300px; margin: 10px; ">
+    </div>
+    <button id="canvasBtn" type="button" onclick="predictPic()">预测</button>
+    <button type="button" onclick="resetCanvas()">清除</button>
+    <div id="predictResult" style="margin-top:20px;"></div>
+</li>
+</body>
+<script type="text/javascript" src="../static/jquery-1.9.1.min.js"></script>
+<script type="text/javascript" src="{{url_for('static', filename='jquery-1.9.1.min.js')}}"></script>
+<script language="JavaScript" type="text/javascript" src="../static/jSignature.min.js"></script>
+<script type="text/javascript" src="{{url_for('static', filename='jSignature.min.js')}}"></script>
+<script>
+    $(function(){
+        //画布初始化 transparent去除初始化的下划线
+        //lineWidth 设置画笔粗细为2
+        $(document).ready(function() {
+            $("#canvas").jSignature({height:100, width: '100%'});
+        })
+    });
+    //预测图片
+    function predictPic(){
+        //判断是否有绘制
+        if($("#canvas").jSignature('getData', 'native').length == 0){
+            console.log('请先绘制再预测');
+            return;
+        }
+        // 提交到后端
+        var postData={};
+        postData.imgStr=$("#canvas").jSignature("getData", "svgbase64")[1];
+        console.log(postData);
+        $.post("http://localhost:8066/predict", postData, function(data) {
+            $("#predictResult").html("预测结果为：" + data["predict_result"]);
+        })
+    }
+    function resetCanvas(){
+        $("#predictResult").html("");
+        $("#canvas").jSignature("reset");
+    }
+</script>
+</html>
