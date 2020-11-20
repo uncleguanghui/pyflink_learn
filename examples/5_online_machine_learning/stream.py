@@ -26,19 +26,6 @@ t_env = StreamTableEnvironment.create(env, environment_settings=env_settings)
 # 设置该参数以使用 UDF
 t_env.get_config().get_configuration().set_boolean("python.fn-execution.memory.managed", True)
 
-# t_env.get_config().get_configuration().set_string(
-#     "metrics.scope.operator", '自定义算子名称')
-# t_env.get_config().get_configuration().set_string(
-#     "metrics.scope.task", '自定义任务名称')
-# t_env.get_config().get_configuration().set_string(
-#     "metrics.scope.jm", '自定义JM')
-# t_env.get_config().get_configuration().set_string(
-#     "metrics.scope.jm.job", '自定义Job')
-# t_env.get_config().get_configuration().set_integer(
-#     "metrics.fetcher.update-interval", 5000)  # 定义 WebUI 上的指标更新间隔（毫秒），值越小获取越频繁，但会对性能有所影响。
-# t_env.get_config().get_configuration().set_integer(
-#     "web.backpressure.cleanup-interval", 3600 * 1000)  # 定义 WebUI 上的统计信息的缓存时间（毫秒）
-
 # ########################### 指定 jar 依赖 ###########################
 
 dir_kafka_sql_connect = os.path.join(os.path.abspath(os.path.dirname(__file__)),
@@ -238,4 +225,4 @@ SELECT
 FROM
     source
 """).insert_into("sink")
-t_env.execute('SGDClassifier Model Train')
+t_env.execute('Classifier Model Train')

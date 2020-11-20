@@ -11,6 +11,13 @@
 * [5、在线机器学习 Online Machine Learning](#5在线机器学习-online-machine-learning)
     * [5.1、在线学习背景介绍](#51在线学习背景介绍)
     * [5.2、实现逻辑详解](#52实现逻辑详解)
+        * [5.2.1、模型的训练](#521模型的训练)
+        * [5.2.2、模型的监控](#522模型的监控)
+        * [5.2.3、模型的服务](#523模型的服务)
+    * [5.3、准备1：数据生成器](#53准备1数据生成器)
+    * [5.4、准备2：模型预测服务](#54准备2模型预测服务)
+    * [5.5、运行](#55运行)
+    * [5.5、模型监控](#56模型监控)
 
 
 Flink 是目前非常火热的流处理框架，可以很好地实现批流一体，即一套代码即可以用于批处理，也可以用于流处理。
@@ -21,7 +28,7 @@ Flink 是目前非常火热的流处理框架，可以很好地实现批流一�
 
 在上手之前，先大致介绍一下 PyFlink：
 1. PyFlink 是 Flink 对 Java API 的一层封装，运行时会启动 JVM 来与 Python 进行通信。
-2. Flink 提供了多种不同层级的 API，层级越高封装程度越高（建议在 SQL API 或 Table API 进行编程），层级由高到低分别为:
+2. PyFlink 提供了多种不同层级的 API，层级越高封装程度越高（建议在 SQL API 或 Table API 进行编程），层级由高到低分别为:
     1) SQL API
     2) Table API
     3) DataStream API / DataSet API
@@ -35,7 +42,7 @@ Flink 是目前非常火热的流处理框架，可以很好地实现批流一�
 
 再次强调，在运行前，先检查：
 1. Python 版本是否是 3.5、3.6 或 3.7。
-1. Docker 是否已经启动，MySQL、Kafka、Zookeeper 容器是否正在运行。
+1. Docker 是否已经启动，MySQL、Kafka、Zookeeper、Redis 容器是否正在运行。
 1. Flink 是否正确安装。
 
 ## 1、批处理 Word Count
@@ -197,7 +204,7 @@ PS：如果像前面案例一样使用 flink run 运行的话，会报错：`Cau
 
 ### 4.1、准备1：数据模拟器
 
-首先，请保证 kafka 服务是正常运行的，且映射到 localhost:9092 。
+首先，请保证基于 docker 运行的 kafka 服务是正常运行的，且映射到 localhost:9092 。
 
 在 `4_window` 目录下的 `kafka_producer.py` 脚本，提供了数据模拟器的功能。
 
@@ -206,7 +213,7 @@ PS：如果像前面案例一样使用 flink run 运行的话，会报错：`Cau
 ```bash
 {
     "ts": "2020-01-01 01:01:01",  # 当前时间
-    "name": "李华",  # 姓名
+    "name": "李华",  # 从根据性别随机产生的 50 个姓名里随机选择
     "sex": "男",  # 性别，60%概率为“男”，40%概率为“女”
     "action": "click",  # 动作，90%概率为“click”，10%概率为“scroll”
     "is_delete": 0,  # 是否要丢弃，90%概率为“0”（不丢弃），10%概率为1“丢弃”
@@ -225,14 +232,14 @@ python kafka_producer.py
 
 Flink 脚本会从 source 表里读取数据，经过实时计算后将结果写入 sink 表，其中 source 表与 sink 表分别对应着 kafka 的不同主题。
 
-启动 2 个终端，其中一个用于监控 source 表（主题为 user_action ）
-```basg
+启动 2 个终端，其中一个用于监控 source 表（主题为 user_action ），运行命令为：
+```bash
 python source_monitor.py
 ``` 
 
 可以看到有源源不断的数据被打印出来，如果觉得太多，可以终止该任务。
 
-另一个终端用于监控 sink 表（主题为 click_rank ）
+另一个终端用于监控 sink 表（主题为 click_rank ），运行命令为：
 
 ```bash
 python sink_monitor.py
@@ -241,6 +248,8 @@ python sink_monitor.py
 `sink_monitor.py` 脚本会将排行榜结果进行实时打印，当前还没有运行 Flink 作业，所以没有结果。
 
 ### 4.3、准备3：聚合函数
+
+这一步可以跳过，因为我已经给你准备好了 `flink-udf-1.0-SNAPSHOT.jar` 包，下面对这个 jar 包的使用、UDAF 的开发做个简单说明。
 
 在 PyFlink 1.11.2 版本，还不支持用 Python 直接编写聚合函数（ UDAF ），因此需要先用 java 来编写聚合函数，然后以 jar 包的形式导入到 python 中。
 
@@ -364,12 +373,13 @@ getTopN 函数的使用就跟 mysql 里的 sum 等函数差不多。
 
 下面拆开来介绍。
 
-模型的训练：
-1. `数据准备`：利用 kafka_producer.py 脚本，读取 Scikit-Learn 提供的手写数字数据集 digits ，随机打乱后写到 Kafka 里，模拟线上`已经做了特征工程`的实时数据，等待流处理任务来消费。
+#### 5.2.1、模型的训练
+
+1. `数据准备`：利用 `kafka_producer.py` 脚本，读取 Scikit-Learn 提供的手写数字数据集 digits ，随机打乱后写到 Kafka 里，模拟线上【已经做了特征工程】的实时数据，等待流处理任务来消费。
 ```bash
 {
     "ts": "2020-01-01 01:01:01",  # 当前时间
-    "x": [0, 1, 2, 16, ...],  # 展平后的图像灰度数据，包含有 64 个整数的数组
+    "x": [0, 1, 2, 16, ...],  # 展平后的图像灰度数据，包含有 64 个整数的数组，整数的定义域为 [0, 16]
     "actual_y": 1,  # 真实标签
 }
 ```
@@ -379,19 +389,111 @@ getTopN 函数的使用就跟 mysql 里的 sum 等函数差不多。
 1. `模型预测`：在 UDF 的 eval 方法里，完成本次的训练后，还会对训练用到的样本做个预测，预测结果一方面作为 UDF 的输出，写回到 Kafka ，另一方面用于计算相关的指标，以实时监控模型的效果。
 1. `模型备份`：如果不对模型进行备份，那么模型只会在内存中，如果作业挂掉就前功尽弃了；在 UDF 中同样要设定模型的备份规则，我这里是 10 秒一次，备份到 Redis。
 
-模型的监控：
+#### 5.2.2、模型的监控
+
 1. `指标注册`：在 UDF 的 open 方法里，对几个监控指标（ Metric ）进行注册。
 1. `指标计算`：在 UDF 的 eval 方法里，完成模型预测后，再计算之前定义的监控指标。
 1. `指标收集`：这一步是 Flink 自动完成的，Flink 会利用 Metric Reporter 收集指标到存储或分析系统。
-1. `指标可视化`：在 Flink Dashboard （[http://localhost:8081](http://localhost:8081) ）可以看到指标的当前值和历史变化趋势。
+1. `指标可视化`：在 Flink Dashboard （[http://localhost:8081](http://localhost:8081) ）可以看到指标的当前值和历史变化趋势，下面是我在案例中实现的其中 3 个指标。
 ![指标可视化](images/image5_1.jpg)
 1. `告警通知`： 本案例里没有做，但在生产环境很重要，如果模型的某些指标出现了超过预期的异常，会影响到线上的预测服务，也就影响了用户体验。
 
-模型的服务：
-> 待补充
+#### 5.2.3、模型的服务
 
-通过本案例，可以学到：
+1. `Web框架`：本案例基于 Flask 框架，实现网页的渲染和提供预测 API 服务，Flask 相比于 Django 更轻量也更易开发。运行 `model_server.py` 后打开主页 [http://localhost:8066](http://localhost:8066) 。
+<div align="center">    
+<img src="images/image5_2.png" width="212" height="256" alt="Web框架" align=center style="border:1px solid #a2a2a2" />
+</div>
+1. `模型加载`：由于模型体积很小，因此无论是否有在实时训练，每次调用预测 API 时都会从 Redis 里动态加载最新的模型；实际线上运行时，需要异步地确认模型版本、异步地加载模型。
+1. `特征工程`：线上传过来的手写数据是类型为 `image/svg+xml;base64` 的字符串，而模型需要的数据为 1 * 64 的灰度数组，因此需要做数据转换，这里就统称为特征工程，主要用到了 `PIL` / `Svglib` / `numpy` 等框架。
+1. `模型预测`：数据处理完成后，直接喂给加载好的模型，调用模型的 `predict` 方法得到预测结果，再用 Flask 的 jsonify 函数序列化后返回给前端。
+
+### 5.3、准备1：数据生成器
+
+就像案例 4 一样，在运行脚本之前，我们先准备好数据和相关脚本。
+
+首先，请保证基于 docker 运行的 kafka 服务是正常运行的，且映射到 localhost:9092 。
+
+在 `5_online_machine_learning` 目录下的 `kafka_producer.py` 脚本，提供了数据模拟器的功能。
+
+它会往 kafka 服务的 handwritten_digit 主题里，每秒写入 10 条 Scikit-Learn 的 digits 数据集里的样本，数据格式为 json 字符串，如下：
+
+```bash
+{
+    "ts": "2020-01-01 01:01:01",  # 当前时间
+    "x": [0, 1, 2, 16, ...],  # 展平后的图像灰度数据，包含有 64 个整数的数组，整数的定义域为 [0, 16]
+    "actual_y": 1,  # 真实标签
+}
+```
+
+运行命令如下：
+
+```bash
+python kafka_producer.py
+```
+
+### 5.4、准备2：模型预测服务
+
+难道一定要等模型训练好了，我们才可以使用模型吗？NoNoNo，都 0202 年了，在线学习过程中的模型，也可以直接使用！
+
+在流处理脚本 `stream.py` 中，我定义的 UDF 会每隔 10 秒往 Redis 里备份模型数据，我们可以把模型拿出来！
+
+首先，请保证基于 docker 运行的 redis 服务是正常运行的，且映射到 localhost:6379 。
+
+然后，预测服务需要做一些跟图像有关的预处理（把 base64 图片数据转为模型支持的矩阵），需要额外安装一些图形处理包，我把这些依赖整理在了案例目录下的 `server_requirements.txt` 文件内，pip 安装：
+
+```bash
+pip install -r server_requirements.txt
+```
+
+最后，启动 Flask App ：
+
+```bash
+python model_server.py
+``` 
+
+打开网页 [http://127.0.0.1:8066/](http://127.0.0.1:8066/)，可以看到一个很简单的画板，我们在蓝框里使用鼠标来手写一个数字，再点击【预测】看看。
+
+![手写数字预测](images/image5_3.png)
+
+可以看到控制台的两条消息，一条是你手写数字的 base64 编码，另一条的报错是因为 Redis 没有启动，或者 Redis 里还没有任何模型数据。
+
+别着急，接下来，让我们边训练模型，边在网页上查看模型的预测能力是怎么实时进化的吧！
+
+### 5.5、运行
+
+cd 到 `examples/5_online_machine_learning` 路径下，运行命令为：
+
+```bash
+flink run -m localhost:8081 -py stream.py
+```
+
+运行之后，我们就可以在前面提供的 Web 应用 [http://127.0.0.1:8066](http://127.0.0.1:8066) 里，手动地测试模型效果。
+
+**重新训练**：
+1. 首先请在 WebUI 里关闭任务（ 如果不知道怎么关闭，可参考 [4.4、运行](#44运行) ），防止模型持续地备份到 Redis。
+2. 然后清空 Redis 里的模型备份数据，防止模型被重新加载，我在本案例目录下准备了一个 `redis_clear.py` 脚本，直接运行即可清空 Redis 。
+
+```bash
+# 如果在脚本后面传入多个 key，则会逐个删除 redis 里的这些 key
+# python redis_clear.py aaa bbb ccc
+python redis_clear.py
+```
+
+### 5.6、模型监控
+
+进入 WebUI [http://localhost:8081](http://localhost:8081)，可以看到提交的名为 `Classifier Model Train` 的 Flink 作业，点击。
+
+然后按下面的步骤，找到自定义的监控指标，自动生成监控报表。
+
+![监控报表](images/image5_4.png)
+
+目前监控指标的可视化功能还在完善过程中，体验可能不是很好。我们也可以按照 [官方文档](https://ci.apache.org/projects/flink/flink-docs-stable/monitoring/metrics.html#prometheus-orgapacheflinkmetricsprometheusprometheusreporter) ，把指标交给应用很成熟的 [Prometheus](https://prometheus.io/) 来管理。
+
+最后，总结一下，通过本案例，可以学到：
 1. 如何在 Flink UDF 中使用 Scikit-Learn 包
-1. 在 UDF 中基于 Redis 加载模型和保存模型
-1. 定义和管理不同类型的指标 Metric
+1. 在 UDF 中连接 Redis，以加载模型和保存模型
+1. 在 UDF 中训练模型
+1. 在 UDF 中注册指标和计算指标
 1. 在 Web 页面上实时查看指标，了解算法的运行情况
+1. 开发 Flask 应用，并基于 Redis 里的最新模型提供预测服务。

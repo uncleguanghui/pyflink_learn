@@ -37,10 +37,12 @@
             return;
         }
         // 提交到后端
+        var image=$("#canvas").jSignature("getData", "svgbase64");
+        console.log(image);
         var postData={};
-        postData.imgStr=$("#canvas").jSignature("getData", "svgbase64")[1];
-        console.log(postData);
+        postData.imgStr=image[1];
         $.post("http://localhost:8066/predict", postData, function(data) {
+            console.log(data);
             $("#predictResult").html("预测结果为：" + data["predict_result"]);
         })
     }
