@@ -23,7 +23,7 @@ java -version
 # 可能会看到 java version "1.8.0_111"
 ```
 
-然后使用 brew 安装 Flink
+然后使用 brew 安装 Flink ，目前 Flink 的最新版本为 1.11.2
 
 ```bash
 brew switch apache-flink 1.11.2
@@ -110,6 +110,13 @@ docker-compose stop
 docker-compose down
 ```
 
+如果遇到某个容器启动失败的话，一个简单的方法就是先删掉该容器，然后重新构建，以 kafka 为例：
+
+```bash
+docker rm kafka
+docker-compose up -d --build
+```
+
 ### 1.3、安装Python3
 
 PyFlink 要求 python 版本为 3.5、3.6 或 3.7，否则会出错。
@@ -140,10 +147,10 @@ PyFlink 要求 python 版本为 3.5、3.6 或 3.7，否则会出错。
 - [x] 3、`实时 CDC`：
     - 教你如何使用 PyFlink 搭建实时数仓
     - 如何从业务数仓（本案例是 mysql1 ）实时捕获 binlog 中的数据变更，并 upsert 到备份数仓（本案例是 mysql2 ）
-- [x] 4、`有状态流处理`：
-    - 教你如何使用 PyFlink 来实现一个基于 Kafka 的实时排行榜
+- [x] 4、`实时排行榜`：
+    - 教你如何使用 PyFlink 来实现有状态流处理
     - 如何在 python 环境中导入和使用 java 编写的聚合函数 jar 包
-    - 如何基于滑动窗口实现数据的过滤和统计
+    - 如何使用滑动窗口，来实现一个指定时间范围内的排行榜。
 - [x] 5、`在线机器学习 Online Machine Learning`：
     - 教你如何使用 PyFlink 来进行在线机器学习
     - 如何在 UDF 中连接 Redis，以加载模型和保存模型

@@ -49,7 +49,7 @@ t_env.connect(FileSystem().path(dir_log)) \
 
 # ########################### 创建结果表(sink) ###########################
 
-dir_result = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'result.csv')
+dir_result = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'result')
 
 # 如果文件/文件夹存在，则删除
 if os.path.exists(dir_result):

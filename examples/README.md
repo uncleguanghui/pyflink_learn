@@ -3,11 +3,12 @@
 * [1、批处理 Word Count](#1批处理-word-count)
 * [2、自定义函数 UDF](#2自定义函数-udf)
 * [3、实时 MySQL CDC](#3实时-mysql-cdc)
-* [4、有状态流处理](#4、有状态流处理)
+* [4、实时排行榜](#4实时排行榜)
     * [4.1、准备1：数据模拟器](#41准备1数据模拟器)
     * [4.2、准备2：kafka 监控](#42准备2kafka-监控)
-    * [4.3、准备3：聚合函数](#43准备3聚合函数)
+    * [4.3、准备3：Java 编写的 UDF](#43准备3java-编写的-udf)
     * [4.4、运行](#44运行)
+    * [4.5、排行榜可视化](#45排行榜可视化)
 * [5、在线机器学习 Online Machine Learning](#5在线机器学习-online-machine-learning)
     * [5.1、在线学习背景介绍](#51在线学习背景介绍)
     * [5.2、实现逻辑详解](#52实现逻辑详解)
@@ -73,7 +74,7 @@ flink run -m localhost:8081 -py batch.py
 
 SQL API 是对 Table API 的更高层次的封装，内部实现了一些优化，便于阅读，但相对地功能没有 Table API 来得全面和强大，本质上并无不同之处，读者根据需求可自行选择实现方法。
 
-运行后的结果写到了同级目录下的 result.csv 中：
+运行后的结果写到了同级目录下的 result 目录中，被拆分为若干个小文件，所有小文件的内容汇总后可以得到如下内容（此处不显示如何汇总）：
 
 ```
 flink,3
@@ -126,7 +127,7 @@ flink run -m localhost:8081 -py batch.py
 
 登录 [http://localhost:8081](http://localhost:8081) 可以看到有个正在运行的任务，大约半分钟左右运行完。
 
-运行后的结果写到了同级目录下的 result.csv 中：
+运行后的结果写到了同级目录下的 result 目录中：
 
 ```
 syslog-system,爱尔兰,,,,,,
@@ -190,7 +191,7 @@ PS：如果像前面案例一样使用 flink run 运行的话，会报错：`Cau
 2. 如何使用各类 connector ，以及如何管理在 pyflink 脚本中指定 jar 依赖。
 3. 如何实现实时数仓的数据同步。
 
-## 4、有状态流处理
+## 4、实时排行榜
 
 > **业务场景**
 > 
@@ -247,7 +248,7 @@ python sink_monitor.py
 
 `sink_monitor.py` 脚本会将排行榜结果进行实时打印，当前还没有运行 Flink 作业，所以没有结果。
 
-### 4.3、准备3：聚合函数
+### 4.3、准备3：Java 编写的 UDF
 
 这一步可以跳过，因为我已经给你准备好了 `flink-udf-1.0-SNAPSHOT.jar` 包，下面对这个 jar 包的使用、UDAF 的开发做个简单说明。
 
@@ -259,15 +260,15 @@ python sink_monitor.py
 1. TopN：本次案例的主角，继承自 AggregateFunction，用于 groupby 后统计出现次数最多的 N 个名称及其出现次数，并将结果拼接为字符串（如 `"{\"name1\":count1}, {\"name2\":count2}, ..."`），用法为 `TopN(name, N, 1)`，其中 N 是 TopN 里的 N，为固定值。
 1. WeightedAvg：继承自 AggregateFunction，用于 groupby 后统计出加权平均值，用法为 `WeightedAvg(value, weight)`。
 
-如果还要自行开发 udf 的话，可以参考 4_window/java_udf 目录，在 src/main/java/com/flink/udf 下编写 java 脚本，具体写法此处不赘述。
+本次用到的 TopN 函数，具体实现请前往 `4_window/java_udf/src/main/java/com/flink/udf/TopN.java` ，内部有详细的注释，请结合官方文档 [Aggregation Functions](https://ci.apache.org/projects/flink/flink-docs-release-1.11/dev/table/functions/udfs.html#aggregation-functions) 阅读。    
 
-udf 开发完之后，在 java_udf 的根路径下，使用 maven 进行打包：
+如果还要自行开发 udf 的话，可以参考上述路径下的其他 java 脚本，具体写法此处不赘述。udf 开发完之后，cd 到上层的 4_window/java_udf 路径下，然后使用 maven 进行打包：
 
 ```bash
 mvn clean package
 ```
 
-几秒之后，打包完的 jar 包会在当前目录新生成一个 target 文件夹，名为 flink-udf-1.0-SNAPSHOT.jar ，拷贝出来放在 4_window 下面即可替换掉原来的 flink-udf-1.0-SNAPSHOT.jar 即可。
+几秒之后，打包完的 jar 包会在当前目录新生成一个 target 文件夹，里面有一个名为 flink-udf-1.0-SNAPSHOT.jar 的文件，拷贝出来放在 4_window 目录下，替换掉原来的 flink-udf-1.0-SNAPSHOT.jar 即可。
 
 ### 4.4、运行
 
@@ -280,23 +281,6 @@ flink run -m localhost:8081 -py stream11.py
 运行之后，可以在 [localhost:8081](localhost:8081) 看到提交的名为 `Top10 User Click` 的 flink 作业。
 
 PS: control + C 不能彻底终止脚本，因为脚本已经提交了，需要在 [localhost:8081](localhost:8081) 里点击对应的 job 然后再点击右上角的 Cancel Job 才算彻底终止。
-
-同时，可以在前面运行 `sink_monitor.py` 监控脚本的终端里看到实时更新的排行榜数据。此处为了简化显示，排行榜只看 top5，如下:
-
-```bash
-=== 男 ===
-刘备    80
-张飞    72
-韩信    70
-关云长  30
-曹操    23
-=== 女 == 
-大乔    60
-小乔    55
-貂蝉    32
-甄宓    13
-蔡琰    4
-```
 
 下面对 `stream11.py` 脚本里的重要内容做一下说明。
 
@@ -333,6 +317,25 @@ getTopN 函数的使用就跟 mysql 里的 sum 等函数差不多。
     1. 使用 w.start, w.end 来获得滑动窗口的开始时间与结束时间
 
 两种的具体实现，均已在 `stream11.py` 脚本里，可自行查阅。
+
+### 4.5、排行榜可视化
+
+可以在前面运行 `sink_monitor.py` 监控脚本的终端里看到实时更新的排行榜数据。此处为了简化显示，排行榜只看 top5，如下:
+
+```bash
+=== 男 ===
+刘备    80
+张飞    72
+韩信    70
+关云长  30
+曹操    23
+=== 女 == 
+大乔    60
+小乔    55
+貂蝉    32
+甄宓    13
+蔡琰    4
+```
 
 通过本案例，可以学到：
 1. 如何导入 java 依赖包。

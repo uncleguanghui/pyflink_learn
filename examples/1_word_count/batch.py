@@ -70,7 +70,7 @@ t_env.execute_sql(f"""
 # ########################### 创建结果表(sink) ###########################
 # sink 指发送数据，即待处理的数据流的出口，这里使用同级目录下的 result.csv，实际中可能会把处理好的数据存到 MySQL、Kafka、Hive 等
 
-dir_result = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'result.csv')
+dir_result = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'result')
 
 # 如果文件/文件夹存在，则删除
 if os.path.exists(dir_result):
@@ -104,13 +104,13 @@ t_env.execute_sql(f"""
 # ########################### 批处理任务 ###########################
 
 # 基于 SQL API
-t_env.execute_sql("""
-    INSERT INTO sink
+t_env.sql_query("""
     SELECT word
            , count(1) AS cnt
     FROM source
     GROUP BY word
-""")
+""").insert_into('sink')
+t_env.execute('t')
 
 # 基于 table API
 # t_env.from_path('source') \
