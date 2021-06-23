@@ -5,3 +5,4 @@ numpy>=1.16.3
 reprint>=0.5.2
 scikit-learn>=0.23.2
 redis>=3.5.3
+Flask-Cors
