@@ -132,12 +132,13 @@ slide_window = Slide.over("60.seconds").every("1.seconds").on('ts').alias("w")  
 
 # 基于 Table API
 t_env.from_path('source') \
-    .filter("action = 'click' and is_delete = 1 ") \
+    .filter("action = 'click'") \
+    .filter("is_delete = 0") \
     .window(slide_window) \
     .group_by("w") \
-    .select("male_click_top10(name, sex) AS male_top10, "
-            "female_click_top10(name, sex) AS female_top10, "
+    .select("male_click_top10(name, sex) as male_top10, "
+            "female_click_top10(name, sex) as female_top10, "
             "w.start AS start_time, "
             "w.end AS end_time") \
-    .execute_insert("sink")
+    .insert_into("sink")
 t_env.execute(source_topic)
